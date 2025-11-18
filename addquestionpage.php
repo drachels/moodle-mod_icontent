@@ -101,6 +101,13 @@ $qcids = \qbank_managecategories\helper::get_categories_for_contexts(
     $sortorder = 'parent, sortorder, name ASC',
     $top = false
 );
+if (empty($qcids)) 
+{ 
+  echo $OUTPUT->header(); 
+  echo $OUTPUT->notification(get_string('noquestionsfound', 'mod_icontent'), 'warning'); 
+  echo $OUTPUT->continue_button(new moodle_url('/mod/icontent/view.php', ['id' => $cm->id, 'pageid' => $pageid])); 
+  echo $OUTPUT->footer(); exit; 
+}
 foreach ($qcids as $qcid) {
     $questioncategoryid = $qcid->id;
     $questioncategoryname = $qcid->name;
