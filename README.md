@@ -1,3 +1,12 @@
+## IMPROVEMENTS ON THIS FORK
+This fork includes a fix for the "Add Question" button error when editing
+content pages or creating new pages in Moodle 4.0+.
+
+The original repository is inactive, so this pull request remains pending,
+but the fix works and is used in production.
+
+
+
 # Moodle iContent 1.0.7
 [![License](https://poser.pugx.org/covex-nn/moodle/license)](http://www.gnu.org/copyleft/gpl.html)
 
