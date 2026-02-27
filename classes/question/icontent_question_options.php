@@ -141,6 +141,42 @@ class icontent_question_options {
     }
 
     /**
+     * Count questions for the selected category using the same filters as the listing query.
+     *
+     * @param int $questioncategoryid
+     * @return int
+     */
+    public static function icontent_count_questions_of_questionbank_filtered($questioncategoryid) {
+        global $DB;
+        $sql = "SELECT COUNT(1)
+                  FROM {question} q
+                  JOIN {question_versions} qv ON qv.questionid = q.id
+                  JOIN {question_bank_entries} qbe ON qbe.id = qv.questionbankentryid
+                  JOIN {question_categories} qc ON qc.id = qbe.questioncategoryid
+                 WHERE q.qtype IN (?,?,?,?)
+                   AND qv.status IN (?,?)
+                   AND qv.version = (
+                        SELECT MAX(v.version)
+                          FROM {question_versions} v
+                         WHERE v.questionbankentryid = qv.questionbankentryid
+                           AND v.status IN (?,?)
+                   )
+                   AND qbe.questioncategoryid = ?";
+        $params = [
+            ICONTENT_QTYPE_ESSAY,
+            ICONTENT_QTYPE_MATCH,
+            ICONTENT_QTYPE_MULTICHOICE,
+            ICONTENT_QTYPE_TRUEFALSE,
+            'ready',
+            'draft',
+            'ready',
+            'draft',
+            (int) $questioncategoryid,
+        ];
+        return (int) $DB->count_records_sql($sql, $params);
+    }
+
+    /**
      * Remove answers the attempts summary the current page.
      *
      * Returns true os false
