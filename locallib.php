@@ -2803,7 +2803,7 @@ function icontent_make_cover_page($icontent, $objpage, $context) {
     $title = html_writer::tag('h1', $objpage->title, ['class' => 'titlecoverpage']);
     $header = $objpage->showtitle ? html_writer::div($title, 'headercoverpage row ') : false;
     $content = html_writer::div($chars, "contentcoverpage ". $displaynone);
-    $coverpage = html_writer::tag('div', $header. $content. $script,
+    $coverpage = html_writer::tag('div', $toolbarpage. $header. $content. $script,
         [
             'class' => 'fulltextpage coverpage',
             'data-pageid' => $objpage->id,
