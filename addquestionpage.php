@@ -158,7 +158,10 @@ if (empty($questions) && $questioncategoryid) {
         $perpage
     );
 }
-$tquestions = icontent_count_questions_of_questionbank($coursecontext);
+$tquestions = 0;
+if ($questioncategoryid) {
+    $tquestions = icontent_question_options::icontent_count_questions_of_questionbank_filtered($questioncategoryid);
+}
 echo get_string('totalquestioncount', 'icontent', $tquestions);
 $qtscurrentpage = icontent_get_questions_of_currentpage($pageid, $cm->id);
 $answerscurrentpage = icontent_checks_answers_of_currentpage($pageid, $cm->id);
