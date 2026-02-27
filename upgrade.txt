@@ -14,8 +14,7 @@ This files describes API changes and other work in the iContent code.
 20240212 iContent_1206 - Feture request - Change color settings code to allow for
     word colors.
 
-20240108 iContent_1161 - Displayed list of possible answers is not being shuffled in Matching
-    type question. See ticket for details of work in progress.
+
 
 20240715 iContent_1267 - Unable to delete a question from a slide.
 20240718 iContent_1272 - Group mode is on the settings page, but is not used anywhere in the
@@ -32,19 +31,32 @@ This files describes API changes and other work in the iContent code.
     by line 2967 in locallib.php.
 
 === 2.0.0 === pending
-20240915 iContent_1318 - Need to add the page ID to the URL when viewing a page. With assistance
-    from Copilot Pro AI, the pgae ID is shown in the URL for each page.
-
-=== 1.0.7.2 === pending (Build: 2024061600) bumped version 2024061600
 20231223 iContent_1138bt - There does not seem to be a way to get to the index.php page.
     Major work in progress to add more detail to the index.php page and create new
-    icontent/classes/local/icontent_info.php file.
-20231225 iContent_1142 - Need to verify move.php works. It does and works as expected.
-    Made change in lines 54-71 to get rid of an empty, if. See tickt for details.
-
+    icontent/classes/local/icontent_info.php file. As of 20260227 created new overview.php
+    that was needed.
+20231225 iContent_1142bt - Need to verify move.php works. It does and works as expected.
+    Made change in lines 54-71 to get rid of an empty, if. As of 20260227 Copilot Pro has also
+    added the missing toolbar to cover pages. See tickt for details.
 20240205 iContent_1192bt - Need to create a privacy class. 20240209 Created the file.
     Now need to update the code to change all references from diary to icontent. - DONE
-    STILL NEEDS TESTING!
+    20260227 Updated provider.php to use iContent tables/fields and added
+    mod/icontent/tests/privacy/provider_test.php with context and delete-data coverage.
+20240915 iContent_1318bt - Need to add the page ID to the URL when viewing a page. With assistance
+    from Copilot Pro AI, the pgae ID is shown in the URL for each page. Originally reported
+    on 20240915 in a Moodle discussion, as of 20260227 this appears to be fixed.
+20250602 iContent_1379 - iContent Pages - Cover page does not show toolbar forediting or making
+    changes to the page. 20260227 With assistance from Copilot Pro AI, this appears
+    to be fixed by including the toolbar in cover page rendering.
+20260227 iContent_1416bt - Trying to add/edit questions to a slide is broken. With assistance from
+    Copilot Pro AI, the teacher can now add questions, again. Also the matching question ticket
+    iContent_1161 appears to be fixed also.
+
+=== 1.0.7.2 === pending (Build: 2024061600) bumped version 2024061600
+
+
+
+
 
 20240712 iContent_1263bt - Completion, View, is not working. Added three lines of code
     to the view.php file at line 63-65, that sets the view completion status.
@@ -129,8 +141,7 @@ This files describes API changes and other work in the iContent code.
 20240830 iContent_1311 - Exception occurred while calling mod_icontent\privacy\provider::get_contexts_for_userid.
     See tick where I made changes to the SQL in the provider.php file starting at line 117.
 
-20250602 iContent_1379 - iContent Pages - Cover page does not show toolbar forediting or making
-    changes to the page.
+
 
 
 === 1.0.7.1 === 2023122801
