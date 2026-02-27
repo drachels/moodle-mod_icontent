@@ -87,10 +87,11 @@ function icontent_get_toc($pages, $page, $icontent, $cm, $edit) {
             $i ++;
             $title = trim(format_string($pg->title, true, ['context' => $context]));
             $toc .= html_writer::start_tag('li', ['class' => 'clearfix']); // Start <li>.
-            $toc .= html_writer::link('#', $title,
+            $toc .= html_writer::link(new moodle_url('/mod/icontent/view.php', ['id' => $pg->cmid, 'pageid' => $pg->id]), $title,
                 [
                     'title' => s($title),
                     'class' => 'load-page page'.$pg->pagenum,
+                    'data-pageid' => $pg->id,
                     'data-pagenum' => $pg->pagenum,
                     'data-cmid' => $pg->cmid,
                     'data-sesskey' => sesskey(),
@@ -177,10 +178,11 @@ function icontent_get_toc($pages, $page, $icontent, $cm, $edit) {
             if (!$pg->hidden) {
                 $title = trim(format_string($pg->title, true, ['context' => $context]));
                 $toc .= html_writer::start_tag('li', ['class' => 'clearfix']);
-                $toc .= html_writer::link('#', $title,
+                $toc .= html_writer::link(new moodle_url('/mod/icontent/view.php', ['id' => $pg->cmid, 'pageid' => $pg->id]), $title,
                     [
                         'title' => s($title),
                         'class' => 'load-page page'.$pg->pagenum,
+                        'data-pageid' => $pg->id,
                         'data-pagenum' => $pg->pagenum,
                         'data-cmid' => $pg->cmid,
                         'data-sesskey' => sesskey(),
@@ -380,13 +382,14 @@ function icontent_full_paging_button_bar($pages, $cmid, $startwithpage = 1) {
     foreach ($pages as $page) {
         if (!$page->hidden) {
             $npage ++;
-            $pgbuttons .= html_writer::tag('button', $npage,
+            $pgbuttons .= html_writer::link(new moodle_url('/mod/icontent/view.php', ['id' => $page->cmid, 'pageid' => $page->id]), $npage,
                 [
                     'title' => s($page->title),
                     'class' => 'load-page mr-1 btn-icontent-page btn btn-secondary page'.$page->pagenum,
                     'data-toggle' => 'tooltip',
                     'data-totalpages' => $tpages,
                     'data-placement' => 'top',
+                    'data-pageid' => $page->id,
                     'data-pagenum' => $page->pagenum,
                     'data-cmid' => $page->cmid,
                     'data-sesskey' => sesskey(),
@@ -569,6 +572,23 @@ function icontent_get_next_pagenum(stdClass $objpage) {
         ]
     );
     return $page->next;
+}
+
+/**
+ * Get page id by page number.
+ *
+ * @param int $cmid
+ * @param int $pagenum
+ * @return int|null
+ */
+function icontent_get_pageid_by_pagenum($cmid, $pagenum) {
+    global $DB;
+
+    if (empty($pagenum)) {
+        return null;
+    }
+
+    return $DB->get_field('icontent_pages', 'id', ['cmid' => $cmid, 'pagenum' => $pagenum, 'hidden' => 0]) ?: null;
 }
 
 /**
@@ -1332,7 +1352,7 @@ function icontent_count_pagenotelike($pagenoteid) {
 function icontent_get_pagenum_by_pageid($pageid) {
     global $DB;
     $sql = "SELECT pagenum  FROM {icontent_pages} WHERE id = ?;";
-    $obj = $DB->get_record_sql($sql, [$pageid]);
+    $obj = $DB->get_record_sql($sql, [$pageid], MUST_EXIST);
     return $obj->pagenum;
 }
 
@@ -1644,6 +1664,7 @@ function icontent_make_button_previous_page($button, $tpages, $icon = null) {
     $objpage->pagenum = $button->startwithpage;
     $objpage->cmid = $button->cmid;
     $pageprevious = icontent_get_prev_pagenum($objpage);
+    $pagepreviousid = icontent_get_pageid_by_pagenum($button->cmid, $pageprevious);
     $attributes = [
         'title' => $button->title,
         'class' => 'load-page btn-previous-page btn btn-secondary mr-1',
@@ -1651,13 +1672,23 @@ function icontent_make_button_previous_page($button, $tpages, $icon = null) {
         'data-totalpages' => $tpages,
         'data-placement' => 'top',
         'data-pagenum' => $pageprevious,
+        'data-pageid' => $pagepreviousid,
         'data-cmid' => $button->cmid,
         'data-sesskey' => sesskey(),
     ];
-    if (!$pageprevious) {
-        $attributes = $attributes + ['disabled' => 'disabled'];
+    $url = '#';
+    if (!empty($pagepreviousid)) {
+        $url = new moodle_url('/mod/icontent/view.php', ['id' => $button->cmid, 'pageid' => $pagepreviousid]);
     }
-    return html_writer::tag('button', $icon. $button->name, $attributes);
+    if (!$pageprevious) {
+        $attributes = $attributes + [
+            'disabled' => 'disabled',
+            'aria-disabled' => 'true',
+            'tabindex' => '-1',
+            'class' => $attributes['class'].' disabled',
+        ];
+    }
+    return html_writer::link($url, $icon. $button->name, $attributes);
 }
 
 /**
@@ -1675,6 +1706,7 @@ function icontent_make_button_next_page($button, $tpages, $icon = null) {
     $objpage->pagenum = $button->startwithpage;
     $objpage->cmid = $button->cmid;
     $nextpage = icontent_get_next_pagenum($objpage);
+    $nextpageid = icontent_get_pageid_by_pagenum($button->cmid, $nextpage);
     $attributes = [
         'title' => $button->title,
         'class' => 'load-page btn-next-page btn btn-secondary' ,
@@ -1682,13 +1714,23 @@ function icontent_make_button_next_page($button, $tpages, $icon = null) {
         'data-totalpages' => $tpages,
         'data-placement' => 'top',
         'data-pagenum' => $nextpage,
+        'data-pageid' => $nextpageid,
         'data-cmid' => $button->cmid,
         'data-sesskey' => sesskey(),
     ];
-    if (!$nextpage) {
-        $attributes = $attributes + ['disabled' => 'disabled'];
+    $url = '#';
+    if (!empty($nextpageid)) {
+        $url = new moodle_url('/mod/icontent/view.php', ['id' => $button->cmid, 'pageid' => $nextpageid]);
     }
-    return html_writer::tag('button', $button->name. $icon, $attributes);
+    if (!$nextpage) {
+        $attributes = $attributes + [
+            'disabled' => 'disabled',
+            'aria-disabled' => 'true',
+            'tabindex' => '-1',
+            'class' => $attributes['class'].' disabled',
+        ];
+    }
+    return html_writer::link($url, $button->name. $icon, $attributes);
 }
 
 /**
@@ -1905,20 +1947,17 @@ function icontent_make_questions_answers_by_type($question) {
             $questionanswers .= html_writer::start_div('optionslist'); // Start div options list.
             $contenttable = '';
             $arrayanswers = [];
-            // 20240721 This shuffles the order of match list, but the correct answer goes with it.
-            shuffle($options); // 20240718 Trying to shuffle the answers for matching question.
-            foreach ($options as $option) {
+            $rows = array_values($options);
+            $answers = array_values($options);
+            shuffle($rows);
+            shuffle($answers);
+            foreach ($answers as $option) {
                 $optanswertext = trim(strip_tags($option->answertext));
                 $arrayanswers[$optanswertext] = $optanswertext;
             }
-            // ...shuffle($arrayanswers); // 20240718 Trying to shuffle the answers for matching question...
-            // 20240705 Shuffling here does jumble the answers the way I want, but they then ALWAYS get marked as being wrong.
-            // Maybe need to use this shuffle and then rework the code elsewhere to see if the selections are correct.
-
-            foreach ($options as $option) {
+            foreach ($rows as $option) {
                 $fieldname = 'qpid-'.$question->qpid.'_qid-'.$question->qid.'_'.ICONTENT_QTYPE_MATCH.'-'.$option->id;
                 $qtext = html_writer::tag('td', strip_tags($option->questiontext), ['class' => 'matchoptions']);
-                // ...shuffle($arrayanswers); // 20240718 Trying to shuffle the answers for matching question...
                 $answertext = html_writer::tag(
                     'td',
                     html_writer::select($arrayanswers, $fieldname, null,
@@ -1932,9 +1971,6 @@ function icontent_make_questions_answers_by_type($question) {
                 );
                 $contenttable .= html_writer::tag('tr', $qtext. $answertext);
             }
-            // ...shuffle($arrayanswers); // 20240718 Trying to shuffle the answers for matching question...
-            // 20240705 Trying to shuffle the answers here does not do what is need.
-
             $questionanswers .= html_writer::tag('table', $contenttable);
             $questionanswers .= html_writer::end_div(); // End div options list.
             $questionanswers .= html_writer::end_div();
@@ -2241,7 +2277,7 @@ function icontent_make_notesarea($objpage, $icontent) {
                 'id' => 'note-tab',
                 'aria-controls' => 'note',
                 'role' => 'tab',
-                'data-toggle' => 'tab',
+                'data-bs-toggle' => 'tab',
                 'class' => 'nav-link active',
             ]
         ),
@@ -2256,7 +2292,7 @@ function icontent_make_notesarea($objpage, $icontent) {
                 'id' => 'doubt-tab',
                 'aria-controls' => 'doubt',
                 'role' => 'tab',
-                'data-toggle' => 'tab',
+                'data-bs-toggle' => 'tab',
                 'class' => 'nav-link',
             ]
         ),
@@ -2762,12 +2798,15 @@ function icontent_make_cover_page($icontent, $objpage, $context) {
         $displaynone = empty($nospace) ? 'hide' : false;
     }
     $script = icontent_add_script_load_tooltip();
+    // Elements toolbar.
+    $toolbarpage = icontent_make_toolbar($objpage, $icontent);
     $title = html_writer::tag('h1', $objpage->title, ['class' => 'titlecoverpage']);
     $header = $objpage->showtitle ? html_writer::div($title, 'headercoverpage row ') : false;
     $content = html_writer::div($chars, "contentcoverpage ". $displaynone);
     $coverpage = html_writer::tag('div', $header. $content. $script,
         [
             'class' => 'fulltextpage coverpage',
+            'data-pageid' => $objpage->id,
             'data-pagenum' => $objpage->pagenum,
             'style' => icontent_get_page_style($icontent, $objpage, $context),
         ]
@@ -2810,6 +2849,8 @@ function icontent_get_fullpageicontent($pagenum, $icontent, $context) {
         // Control button.
         $objpage->previous = icontent_get_prev_pagenum($objpage);
         $objpage->next = icontent_get_next_pagenum($objpage);
+        $objpage->previouspageid = icontent_get_pageid_by_pagenum($objpage->cmid, $objpage->previous);
+        $objpage->nextpageid = icontent_get_pageid_by_pagenum($objpage->cmid, $objpage->next);
         return $objpage;
     }
     // Add tooltip.
@@ -2860,6 +2901,8 @@ function icontent_get_fullpageicontent($pagenum, $icontent, $context) {
     // Control button.
     $objpage->previous = icontent_get_prev_pagenum($objpage);
     $objpage->next = icontent_get_next_pagenum($objpage);
+    $objpage->previouspageid = icontent_get_pageid_by_pagenum($objpage->cmid, $objpage->previous);
+    $objpage->nextpageid = icontent_get_pageid_by_pagenum($objpage->cmid, $objpage->next);
     // Content page for return.
     $objpage->fullpageicontent = html_writer::tag('div',
         $toolbarpage.
@@ -2873,6 +2916,7 @@ function icontent_get_fullpageicontent($pagenum, $icontent, $context) {
         $script,
         [
             'class' => 'fulltextpage',
+            'data-pageid' => $objpage->id,
             'data-pagenum' => $objpage->pagenum,
             'style' => icontent_get_page_style($icontent, $objpage, $context),
         ]

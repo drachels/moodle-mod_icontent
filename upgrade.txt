@@ -1,4 +1,5 @@
 This files describes API changes and other work in the iContent code.
+
 === Deferred until fixed. ===
 20240101 iContent_1155 - Might want to see about adding an iContent plugin to Grade Me.
 20240104 iContent_1156 - I am getting, You should really redirect before you start page
@@ -27,6 +28,12 @@ This files describes API changes and other work in the iContent code.
 20240920 iContent_1321 - I am unable to Like, or Unlike a Note. 
 
 20240922 iContent_1322 - Need to verify code in lib.php function icontent_print_recent_activity. 
+20241008 iContent - Investigate creating an iContent Tags block. Will need new function referenced
+    by line 2967 in locallib.php.
+
+=== 2.0.0 === pending
+20240915 iContent_1318 - Need to add the page ID to the URL when viewing a page. With assistance
+    from Copilot Pro AI, the pgae ID is shown in the URL for each page.
 
 === 1.0.7.2 === pending (Build: 2024061600) bumped version 2024061600
 20231223 iContent_1138bt - There does not seem to be a way to get to the index.php page.
@@ -122,6 +129,8 @@ This files describes API changes and other work in the iContent code.
 20240830 iContent_1311 - Exception occurred while calling mod_icontent\privacy\provider::get_contexts_for_userid.
     See tick where I made changes to the SQL in the provider.php file starting at line 117.
 
+20250602 iContent_1379 - iContent Pages - Cover page does not show toolbar forediting or making
+    changes to the page.
 
 
 === 1.0.7.1 === 2023122801

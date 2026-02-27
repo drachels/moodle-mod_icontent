@@ -225,6 +225,31 @@ $string['pluginname'] = 'Content Pages';
 $string['preview'] = 'Preview';
 $string['previous'] = ' Previous';
 $string['previouspage'] = 'Page previous';
+
+
+
+$string['privacy:metadata:icontent_pages_notes:pageid'] = 'Found by unit testing that this string was missing.';
+$string['privacy:metadata:icontent_pages_notes:featured'] = 'Featured note.';
+$string['privacy:metadata:icontent_pages_notes:doubttutor'] = 'Question for the teacher/tutor.';
+$string['privacy:metadata:icontent_pages_notes:parent'] = 'Found by unit testing that this string was missing.';
+$string['privacy:metadata:icontent_pages_notes:path'] = 'Found by unit testing that this string was missing.';
+$string['privacy:metadata:icontent_pages_notes:tab'] = 'Notes or Questions.';
+$string['privacy:metadata:icontent_pages_notes'] = 'User notes.';
+$string['privacy:metadata:icontent_pages_notes:private'] = 'Found by unit testing that this string was missing.';
+$string['privacy:metadata:icontent_pages_notes:cmid'] = 'Found by unit testing that this string was missing.';
+$string['privacy:metadata:icontent_pages_notes:timemodified'] = 'Time modified.';
+$string['privacy:metadata:icontent_pages_notes:timecreated'] = 'Time created.';
+$string['privacy:metadata:icontent_pages_notes:comment'] = 'Found by unit testing that this string was missing.';
+$string['privacy:metadata:icontent_pages_notes:userid'] = 'Found by unit testing that this string was missing.';
+$string['privacy:metadata:icontent_pages_notes:timemodified'] = 'Found by unit testing that this string was missing.';
+$string['privacy:metadata:icontent_pages_notes:timecreated'] = 'Found by unit testing that this string was missing.';
+$string['privacy:metadata:icontent_pages_notes:comment'] = 'Found by unit testing that this string was missing.';
+$string['privacy:metadata:icontent_pages_notes:userid'] = 'ID of the user for the note.';
+
+
+
+
+
 $string['private'] = 'Private';
 $string['privates'] = 'Private';
 $string['progressbar'] = 'Progress bar';

@@ -95,26 +95,70 @@ echo $OUTPUT->heading($icontent->name. ": ". get_string('addquestion', 'mod_icon
 // Get info.
 $sort = icontent_check_value_sort($sort);
 
-// 20240107 Added to fix ticket 1147 and 1158.
-$qcids = \qbank_managecategories\helper::get_categories_for_contexts(
-    $coursecontext,
-    $sortorder = 'parent, sortorder, name ASC',
-    $top = false
-);
-foreach ($qcids as $qcid) {
-    $questioncategoryid = $qcid->id;
-    $questioncategoryname = $qcid->name;
+// 20260227 Moodle 5+ uses qbank module contexts for categories.
+$questioncategoryid = 0;
+$questioncategoryname = '';
+$categorycontextids = [];
+
+// Prefer contexts from qbank module instances available in the course.
+$defaultbankmodname = \core_question\local\bank\question_bank_helper::get_default_question_bank_activity_name();
+$modinfo = get_fast_modinfo($course);
+$banks = $modinfo->get_instances_of($defaultbankmodname);
+foreach ($banks as $bank) {
+    $categorycontextids[] = (string) $bank->context->id;
 }
 
-$questions = icontent_question_options::icontent_get_questions_of_questionbank($coursecontext,
-    $questioncategoryid,
-    $sort,
-    $page,
-    $perpage
-);
+// Fallback for older setups where categories may still be in course context.
+$categorycontextids[] = (string) $coursecontext;
+
+$categorycontextids = array_unique(array_filter($categorycontextids));
+$qcids = [];
+if (!empty($categorycontextids)) {
+    $qcids = \qbank_managecategories\helper::get_categories_for_contexts(
+        implode(',', $categorycontextids),
+        $sortorder = 'parent, sortorder, name ASC',
+        $top = false
+    );
+}
+
+if (empty($qcids)) {
+    echo html_writer::div(get_string('emptyquestionbank', 'mod_icontent'), 'alert alert-warning');
+    echo $OUTPUT->footer();
+    exit;
+}
+
+$questions = [];
+foreach ($qcids as $qcid) {
+    $candidateid = (int) $qcid->id;
+    if (!$questioncategoryid) {
+        $questioncategoryid = $candidateid;
+        $questioncategoryname = $qcid->name;
+    }
+    $candidatequestions = icontent_question_options::icontent_get_questions_of_questionbank(
+        $coursecontext,
+        $candidateid,
+        $sort,
+        $page,
+        $perpage
+    );
+    if (!empty($candidatequestions)) {
+        $questioncategoryid = $candidateid;
+        $questioncategoryname = $qcid->name;
+        $questions = $candidatequestions;
+        break;
+    }
+}
+
+if (empty($questions) && $questioncategoryid) {
+    $questions = icontent_question_options::icontent_get_questions_of_questionbank(
+        $coursecontext,
+        $questioncategoryid,
+        $sort,
+        $page,
+        $perpage
+    );
+}
 $tquestions = icontent_count_questions_of_questionbank($coursecontext);
-// 20240107 Added info but the text needs more info.
-echo 'Current question name and categoryid is: '.$questioncategoryname.', '.$questioncategoryid.' ';
 echo get_string('totalquestioncount', 'icontent', $tquestions);
 $qtscurrentpage = icontent_get_questions_of_currentpage($pageid, $cm->id);
 $answerscurrentpage = icontent_checks_answers_of_currentpage($pageid, $cm->id);

@@ -55,7 +55,6 @@ class icontent_question_options {
         $perpage = ICONTENT_PER_PAGE) {
 
         global $DB;
-        $coursecontext = $coursecontext;
         $sort = 'q.name '.$sort;
         $page = (int) $page;
         $perpage = (int) $perpage;
@@ -113,22 +112,30 @@ class icontent_question_options {
                        qbe.ownerid AS QBEownerid
 
                   FROM {question} q
-                  JOIN {question_categories} qc ON qc.parent = q.parent
                   JOIN {question_versions} qv ON qv.questionid = q.id
                   JOIN {question_bank_entries} qbe ON qbe.id = qv.questionbankentryid
-                 WHERE qc.contextid = $coursecontext
-                   AND qc.parent = q.parent
-                   AND q.qtype IN (?,?,?,?,?)
-                   AND qv.status = 'ready'
-                   AND qbe.questioncategoryid = $questioncategoryid
+                                    JOIN {question_categories} qc ON qc.id = qbe.questioncategoryid
+                                 WHERE q.qtype IN (?,?,?,?)
+                                     AND qv.status IN (?,?)
+                                     AND qv.version = (
+                                                SELECT MAX(v.version)
+                                                    FROM {question_versions} v
+                                                 WHERE v.questionbankentryid = qv.questionbankentryid
+                                                     AND v.status IN (?,?)
+                                     )
+                                     AND qbe.questioncategoryid = ?
               ORDER BY {$sort}";
         // 20240720 The number of items in $params array must match the number of question marks in line 120.
         $params = [
-            $coursecontext,
             ICONTENT_QTYPE_ESSAY,
             ICONTENT_QTYPE_MATCH,
             ICONTENT_QTYPE_MULTICHOICE,
             ICONTENT_QTYPE_TRUEFALSE,
+            'ready',
+            'draft',
+            'ready',
+            'draft',
+            $questioncategoryid,
         ];
         return $DB->get_records_sql($sql, $params, $page * $perpage, $perpage);
     }
