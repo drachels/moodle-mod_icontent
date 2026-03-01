@@ -150,6 +150,7 @@ $questions = icontent_question_options::icontent_get_questions_of_questionbank(
     $page,
     $perpage
 );
+$hasquestions = !empty($questions);
 $tquestions = 0;
 if ($questioncategoryid) {
     $tquestions = icontent_question_options::icontent_count_questions_of_questionbank_filtered($questioncategoryid);
@@ -218,7 +219,7 @@ $table->head  = [
     $makeheaderwithmenu('Discriminative efficiency'),
 ];
 
-if ($questions) {
+if ($hasquestions) {
     $hasstatisticsplugin = \core\plugininfo\qbank::is_plugin_enabled('qbank_statistics');
     $questionids = array_map(static function($question) {
         return (int) $question->qid;
@@ -354,8 +355,6 @@ if ($questions) {
     }
 } else {
     echo html_writer::div(get_string('emptyquestionbank', 'mod_icontent'), 'alert alert-warning');
-    echo $OUTPUT->footer();
-    exit;
 }
 // Show elements HTML.
 echo html_writer::div(get_string('infomaxquestionperpage', 'mod_icontent'), 'alert alert-info');
@@ -483,6 +482,7 @@ echo '<input class="btn btn-primary"
     style="border-radius: 8px"
     name="button"
     onClick="return clClick()"
+    '.($hasquestions ? '' : 'disabled="disabled"').'
     type="submit" value="'
     .get_string('add')
     .'"> <a href="'
