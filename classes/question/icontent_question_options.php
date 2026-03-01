@@ -115,8 +115,7 @@ class icontent_question_options {
                   JOIN {question_versions} qv ON qv.questionid = q.id
                   JOIN {question_bank_entries} qbe ON qbe.id = qv.questionbankentryid
                                     JOIN {question_categories} qc ON qc.id = qbe.questioncategoryid
-                                 WHERE q.qtype IN (?,?,?,?)
-                                     AND qv.status IN (?,?)
+                                 WHERE qv.status IN (?,?)
                                      AND qv.version = (
                                                 SELECT MAX(v.version)
                                                     FROM {question_versions} v
@@ -125,12 +124,8 @@ class icontent_question_options {
                                      )
                                      AND qbe.questioncategoryid = ?
               ORDER BY {$sort}";
-        // 20240720 The number of items in $params array must match the number of question marks in line 120.
+        // 20240720 The number of items in $params array must match the number of question marks in SQL.
         $params = [
-            ICONTENT_QTYPE_ESSAY,
-            ICONTENT_QTYPE_MATCH,
-            ICONTENT_QTYPE_MULTICHOICE,
-            ICONTENT_QTYPE_TRUEFALSE,
             'ready',
             'draft',
             'ready',
@@ -153,8 +148,7 @@ class icontent_question_options {
                   JOIN {question_versions} qv ON qv.questionid = q.id
                   JOIN {question_bank_entries} qbe ON qbe.id = qv.questionbankentryid
                   JOIN {question_categories} qc ON qc.id = qbe.questioncategoryid
-                 WHERE q.qtype IN (?,?,?,?)
-                   AND qv.status IN (?,?)
+                                 WHERE qv.status IN (?,?)
                    AND qv.version = (
                         SELECT MAX(v.version)
                           FROM {question_versions} v
@@ -163,10 +157,6 @@ class icontent_question_options {
                    )
                    AND qbe.questioncategoryid = ?";
         $params = [
-            ICONTENT_QTYPE_ESSAY,
-            ICONTENT_QTYPE_MATCH,
-            ICONTENT_QTYPE_MULTICHOICE,
-            ICONTENT_QTYPE_TRUEFALSE,
             'ready',
             'draft',
             'ready',

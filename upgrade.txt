@@ -51,12 +51,19 @@ This files describes API changes and other work in the iContent code.
 20260227 iContent_1416bt - Trying to add/edit questions to a slide is broken. With assistance from
     Copilot Pro AI, the teacher can now add questions, again. Also the matching question ticket
     iContent_1161 appears to be fixed also.
+20260228 iContent - Added feature-flagged Question Engine migration phases for iContent questions.
+    Phase 1 adds QUBA bootstrap/session wiring. Phase 2 renders supported questions from QUBA.
+    Phase 3 processes submitted actions through QUBA and stores attempt summaries in existing
+    iContent tables for reporting/grades. Phase 4 expands supported qtypes to truefalse,
+    multichoice, match, and essay (essay remains mapped to toevaluate for manual review).
+20260228 iContent - Updated addquestionpage.php to use a question-bank-like picker UX with
+    category selection, cleaner columns, comments/statistics display, column action menus,
+    and corrected Preview/Edit return flows back to the current iContent category/page.
+20260228i Content_1417 - Feature requests - Need a color selector for a slide background or
+    border color. Added code to make color selectors similar to the one developed for the
+    prompt_edit.php file in diary.
 
 === 1.0.7.2 === pending (Build: 2024061600) bumped version 2024061600
-
-
-
-
 
 20240712 iContent_1263bt - Completion, View, is not working. Added three lines of code
     to the view.php file at line 63-65, that sets the view completion status.

@@ -44,6 +44,240 @@ define('ICONTENT_QUESTION_FRACTION', 1);
 require_once(dirname(__FILE__).'/lib.php');
 
 /**
+ * Normalize a hex color to six uppercase hex chars without #.
+ *
+ * @param string|null $value
+ * @param string $fallback
+ * @return string
+ */
+function icontent_normalize_hex_colour($value, $fallback = 'FCFCFC') {
+    $default = strtoupper(ltrim(trim((string)$fallback), '#'));
+    if (!preg_match('/^[0-9A-F]{6}$/', $default)) {
+        $default = 'FCFCFC';
+    }
+
+    $normalized = strtoupper(ltrim(trim((string)$value), '#'));
+    if (!preg_match('/^[0-9A-F]{6}$/', $normalized)) {
+        return $default;
+    }
+
+    return $normalized;
+}
+
+/**
+ * Check whether the Phase 1 question engine bridge is enabled.
+ *
+ * @return bool
+ */
+function icontent_question_engine_phase1_enabled() {
+    return !empty(get_config('mod_icontent', 'questionenginephase1'));
+}
+
+/**
+ * Get qtypes supported by the Phase 1 bridge.
+ *
+ * @return array
+ */
+function icontent_question_engine_phase1_supported_qtypes() {
+    $legacyqtypes = [];
+
+    $allqtypes = array_values(array_keys(\core_component::get_plugin_list('qtype')));
+    return array_values(array_diff($allqtypes, $legacyqtypes));
+}
+
+/**
+ * Reset cached QUBA usage for one user/page combination.
+ *
+ * @param int $cmid
+ * @param int $pageid
+ * @param int $userid
+ * @return void
+ */
+function icontent_question_engine_phase1_reset_page_usage($cmid, $pageid, $userid) {
+    global $SESSION;
+
+    if (empty($SESSION->mod_icontent_quba) || !is_array($SESSION->mod_icontent_quba)) {
+        return;
+    }
+
+    $sessionkey = icontent_question_engine_phase1_get_session_key((int)$cmid, (int)$pageid, (int)$userid);
+    if (array_key_exists($sessionkey, $SESSION->mod_icontent_quba)) {
+        unset($SESSION->mod_icontent_quba[$sessionkey]);
+    }
+}
+
+/**
+ * Build session key used to store a QUBA id per user/page.
+ *
+ * @param int $cmid
+ * @param int $pageid
+ * @param int $userid
+ * @return string
+ */
+function icontent_question_engine_phase1_get_session_key($cmid, $pageid, $userid) {
+    return 'cm'.$cmid.'_page'.$pageid.'_user'.$userid;
+}
+
+/**
+ * Phase 1 bridge: create/load a QUBA for supported question types.
+ *
+ * This wiring is intentionally non-invasive. It prepares question_engine usage
+ * behind a feature flag while keeping the existing iContent renderer and submit
+ * pipeline unchanged.
+ *
+ * @param object $objpage
+ * @param array $questions
+ * @return void
+ */
+function icontent_question_engine_phase1_bootstrap_usage($objpage, $questions) {
+    global $CFG, $SESSION, $USER;
+
+    if (!icontent_question_engine_phase1_enabled()) {
+        return;
+    }
+
+    if (empty($questions) || empty($objpage->cmid) || empty($objpage->id) || empty($USER->id)) {
+        return;
+    }
+
+    $supportedqtypes = icontent_question_engine_phase1_supported_qtypes();
+    $eligiblequestions = [];
+    foreach ($questions as $question) {
+        if (!empty($question->qtype) && in_array($question->qtype, $supportedqtypes)) {
+            $eligiblequestions[] = $question;
+        }
+    }
+
+    if (empty($eligiblequestions)) {
+        return;
+    }
+
+    require_once($CFG->libdir.'/questionlib.php');
+
+    if (!isset($SESSION->mod_icontent_quba)) {
+        $SESSION->mod_icontent_quba = [];
+    }
+
+    $sessionkey = icontent_question_engine_phase1_get_session_key($objpage->cmid, $objpage->id, $USER->id);
+    $existingqubaid = $SESSION->mod_icontent_quba[$sessionkey] ?? 0;
+    $targetcount = count($eligiblequestions);
+    $targetquestionids = array_map(static function($question) {
+        return (int)$question->qid;
+    }, $eligiblequestions);
+    sort($targetquestionids);
+
+    if (!empty($existingqubaid)) {
+        try {
+            $existingquba = question_engine::load_questions_usage_by_activity($existingqubaid);
+            $existingquestionids = [];
+            foreach ($existingquba->get_slots() as $slot) {
+                $slotquestion = $existingquba->get_question($slot);
+                if (!empty($slotquestion->id)) {
+                    $existingquestionids[] = (int)$slotquestion->id;
+                }
+            }
+            sort($existingquestionids);
+
+            if (count($existingquba->get_slots()) === $targetcount && $existingquestionids === $targetquestionids) {
+                return;
+            }
+        } catch (Exception $e) {
+            // Fall through and recreate usage.
+        }
+    }
+
+    $context = context_module::instance($objpage->cmid);
+    $quba = question_engine::make_questions_usage_by_activity('mod_icontent', $context);
+    $quba->set_preferred_behaviour('deferredfeedback');
+
+    foreach ($eligiblequestions as $question) {
+        try {
+            $questiondef = question_bank::load_question($question->qid);
+            $quba->add_question($questiondef, 1);
+        } catch (Exception $e) {
+            // Skip invalid question definitions and continue with remaining items.
+            continue;
+        }
+    }
+
+    if (!count($quba->get_slots())) {
+        return;
+    }
+
+    $quba->start_all_questions();
+    question_engine::save_questions_usage_by_activity($quba);
+    $SESSION->mod_icontent_quba[$sessionkey] = $quba->get_id();
+}
+
+/**
+ * Phase 2 bridge: render a supported question using question_engine/QUBA.
+ *
+ * This intentionally does not process actions yet (Phase 3). It is a render-only
+ * bridge with safe fallback to legacy HTML when anything is unavailable.
+ *
+ * @param object $objpage
+ * @param object $question
+ * @param int $displaynumber
+ * @return string|false
+ */
+function icontent_question_engine_phase2_render_question($objpage, $question, $displaynumber = 1) {
+    global $CFG, $SESSION, $USER;
+
+    if (!icontent_question_engine_phase1_enabled()) {
+        return false;
+    }
+
+    if (empty($question->qtype) || !in_array($question->qtype, icontent_question_engine_phase1_supported_qtypes())) {
+        return false;
+    }
+
+    if (empty($objpage->cmid) || empty($objpage->id) || empty($USER->id)) {
+        return false;
+    }
+
+    if (empty($SESSION->mod_icontent_quba) || !is_array($SESSION->mod_icontent_quba)) {
+        return false;
+    }
+
+    $sessionkey = icontent_question_engine_phase1_get_session_key($objpage->cmid, $objpage->id, $USER->id);
+    $qubaid = $SESSION->mod_icontent_quba[$sessionkey] ?? 0;
+    if (empty($qubaid)) {
+        return false;
+    }
+
+    require_once($CFG->libdir.'/questionlib.php');
+
+    try {
+        $quba = question_engine::load_questions_usage_by_activity($qubaid);
+    } catch (Exception $e) {
+        return false;
+    }
+
+    $slot = null;
+    foreach ($quba->get_slots() as $candidateslot) {
+        try {
+            $slotquestion = $quba->get_question($candidateslot);
+            if (!empty($slotquestion->id) && (int)$slotquestion->id === (int)$question->qid) {
+                $slot = $candidateslot;
+                break;
+            }
+        } catch (Exception $e) {
+            continue;
+        }
+    }
+
+    if (empty($slot)) {
+        return false;
+    }
+
+    $displayoptions = new question_display_options();
+    return html_writer::div(
+        $quba->render_question($slot, $displayoptions, (string)$displaynumber),
+        'question '.s($question->qtype).' qengine-render'
+    );
+}
+
+/**
  * Add the icontent TOC sticky block to the default region.
  *
  * @param array $pages
@@ -204,9 +438,12 @@ function icontent_get_toc($pages, $page, $icontent, $cm, $edit) {
  * @return void
  */
 function icontent_add_properties_css($pagestyle) {
-    $style = "background-color: #{$pagestyle->bgcolor}; ";
+    $bgcolor = icontent_normalize_hex_colour($pagestyle->bgcolor, 'FCFCFC');
+    $bordercolor = icontent_normalize_hex_colour($pagestyle->bordercolor, 'E4E4E4');
+
+    $style = "background-color: #{$bgcolor}; ";
     $style .= "min-height: ". ICONTENT_PAGE_MIN_HEIGHT ."px; ";
-    $style .= "border: {$pagestyle->borderwidth}px solid #{$pagestyle->bordercolor};";
+    $style .= "border: {$pagestyle->borderwidth}px solid #{$bordercolor};";
     if ($pagestyle->bgimage) {
         $style .= "background-image: url('{$pagestyle->bgimage}')";
     }
@@ -970,7 +1207,12 @@ function icontent_get_attempts_users_with_open_answers($cmid, $sort, $status = n
  */
 function icontent_get_attempt_summary_by_page($pageid, $cmid) {
     global $DB, $USER;
-    // SQL Query.
+
+    $latestattempttime = icontent_get_latest_attempt_timecreated_by_page($pageid, $cmid, $USER->id);
+    if (empty($latestattempttime)) {
+        return false;
+    }
+
     $sql = "SELECT Sum(qa.fraction) AS sumfraction,
                    Count(qa.id) AS totalanswers,
                    qa.timecreated
@@ -980,9 +1222,9 @@ function icontent_get_attempt_summary_by_page($pageid, $cmid) {
              WHERE pq.pageid = ?
                AND pq.cmid = ?
                AND qa.userid = ?
-          GROUP BY qa.timecreated;";
-    // Get record.
-    $attemptsummary = $DB->get_record_sql($sql, [$pageid, $cmid, $USER->id]);
+               AND qa.timecreated = ?
+          GROUP BY qa.timecreated";
+    $attemptsummary = $DB->get_record_sql($sql, [$pageid, $cmid, $USER->id, $latestattempttime]);
     // Checks if a property isn't empty.
     if (!empty($attemptsummary->totalanswers)) {
         return $attemptsummary;
@@ -1001,6 +1243,11 @@ function icontent_get_attempt_summary_by_page($pageid, $cmid) {
  */
 function icontent_get_right_answers_by_attempt_summary_by_page($pageid, $cmid) {
     global $DB, $USER;
+    $latestattempttime = icontent_get_latest_attempt_timecreated_by_page($pageid, $cmid, $USER->id);
+    if (empty($latestattempttime)) {
+        return (object)['totalrightanswers' => 0];
+    }
+
     $sql = "SELECT Count(qa.id) AS totalrightanswers
               FROM {icontent_question_attempts} qa
         INNER JOIN {icontent_pages_questions} pq
@@ -1008,8 +1255,9 @@ function icontent_get_right_answers_by_attempt_summary_by_page($pageid, $cmid) {
              WHERE qa.fraction > 0
                AND pq.pageid = ?
                AND pq.cmid = ?
-               AND qa.userid = ?;";
-    return $DB->get_record_sql($sql, [$pageid, $cmid, $USER->id]);
+               AND qa.userid = ?
+               AND qa.timecreated = ?";
+    return $DB->get_record_sql($sql, [$pageid, $cmid, $USER->id, $latestattempttime]);
 }
 
 /**
@@ -1023,6 +1271,11 @@ function icontent_get_right_answers_by_attempt_summary_by_page($pageid, $cmid) {
  */
 function icontent_get_open_answers_by_attempt_summary_by_page($pageid, $cmid) {
     global $DB, $USER;
+    $latestattempttime = icontent_get_latest_attempt_timecreated_by_page($pageid, $cmid, $USER->id);
+    if (empty($latestattempttime)) {
+        return (object)['totalopenanswers' => 0];
+    }
+
     $sql = "SELECT Count(qa.id) AS totalopenanswers
               FROM {icontent_question_attempts} qa
         INNER JOIN {icontent_pages_questions} pq
@@ -1030,8 +1283,36 @@ function icontent_get_open_answers_by_attempt_summary_by_page($pageid, $cmid) {
              WHERE pq.pageid = ?
                AND pq.cmid = ?
                AND qa.userid = ?
-               AND qa.rightanswer IN (?);";
-    return $DB->get_record_sql($sql, [$pageid, $cmid, $USER->id, ICONTENT_QTYPE_ESSAY_STATUS_TOEVALUATE]);
+               AND qa.rightanswer IN (?)
+               AND qa.timecreated = ?";
+    return $DB->get_record_sql($sql, [$pageid, $cmid, $USER->id, ICONTENT_QTYPE_ESSAY_STATUS_TOEVALUATE, $latestattempttime]);
+}
+
+/**
+ * Get latest attempt timestamp by page, module and user.
+ *
+ * @param int $pageid
+ * @param int $cmid
+ * @param int $userid
+ * @return int|null
+ */
+function icontent_get_latest_attempt_timecreated_by_page($pageid, $cmid, $userid) {
+    global $DB;
+
+    $sql = "SELECT MAX(qa.timecreated)
+              FROM {icontent_question_attempts} qa
+        INNER JOIN {icontent_pages_questions} pq
+                ON qa.pagesquestionsid = pq.id
+             WHERE pq.pageid = ?
+               AND pq.cmid = ?
+               AND qa.userid = ?";
+    $latestattempttime = $DB->get_field_sql($sql, [$pageid, $cmid, $userid]);
+
+    if ($latestattempttime === false || $latestattempttime === null) {
+        return null;
+    }
+
+    return (int)$latestattempttime;
 }
 
 /**
@@ -1801,6 +2082,10 @@ function icontent_make_questionsarea($objpage, $icontent) {
     if (!$questions) {
         return false;
     }
+
+    // Phase 1 wiring: bootstrap question engine usage for supported qtypes.
+    icontent_question_engine_phase1_bootstrap_usage($objpage, $questions);
+
     if (icontent_get_attempt_summary_by_page($objpage->id, $objpage->cmid)) {
         return icontent_make_attempt_summary_by_page($objpage->id, $objpage->cmid);
     }
@@ -1814,9 +2099,11 @@ function icontent_make_questionsarea($objpage, $icontent) {
         ]
     );
     $qlist = '';
+    $questionnumber = 1;
     foreach ($questions as $question) {
         // Assemble the listing of all the questions on a slide/page.
-        $qlist .= icontent_make_questions_answers_by_type($question);
+        $qlist .= icontent_make_questions_answers_by_type($question, $objpage, $questionnumber);
+        $questionnumber++;
     }
     // Hidden form fields.
     $hiddenfields = html_writer::empty_tag('input',
@@ -1886,10 +2173,20 @@ function icontent_make_questionsarea($objpage, $icontent) {
  * Returns fields and answers by type.
  *
  * @param object $question
+ * @param object|null $objpage
+ * @param int $displaynumber
  * @return string $answers
  */
-function icontent_make_questions_answers_by_type($question) {
+function icontent_make_questions_answers_by_type($question, $objpage = null, $displaynumber = 1) {
     global $DB;
+
+    if (!empty($objpage)) {
+        $qenginehtml = icontent_question_engine_phase2_render_question($objpage, $question, $displaynumber);
+        if ($qenginehtml !== false) {
+            return $qenginehtml;
+        }
+    }
+
     switch ($question->qtype) {
         case ICONTENT_QTYPE_MULTICHOICE:
             $answers = $DB->get_records('question_answers', ['question' => $question->qid]);
@@ -1965,13 +2262,15 @@ function icontent_make_questions_answers_by_type($question) {
                             '' => 'choosedots',
                         ],
                         [
+                            'class' => 'match-select',
                             'required' => 'required',
                         ]
-                    )
+                    ),
+                    ['class' => 'matchanswer']
                 );
                 $contenttable .= html_writer::tag('tr', $qtext. $answertext);
             }
-            $questionanswers .= html_writer::tag('table', $contenttable);
+            $questionanswers .= html_writer::tag('table', $contenttable, ['class' => 'match-table']);
             $questionanswers .= html_writer::end_div(); // End div options list.
             $questionanswers .= html_writer::end_div();
             return $questionanswers;

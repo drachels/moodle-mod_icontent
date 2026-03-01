@@ -48,6 +48,7 @@ $PAGE->set_heading($course->fullname);
 if ($confirm) {
     $delete = icontent_question_options::icontent_remove_answers_attempt_toquestion_by_page($pageid, $cm->id);
     if ($delete) {
+        icontent_question_engine_phase1_reset_page_usage($cm->id, $pageid, $USER->id);
         // Update grade.
         icontent_set_grade_item($icontent, $cm->id, $USER->id);
         // Event log.

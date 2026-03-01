@@ -141,6 +141,13 @@ if ($ADMIN->fulltree) {
         ]
     ));
 
+    // 20260228 Question engine migration (Phase 1) feature flag.
+    $name = 'mod_icontent/questionenginephase1';
+    $title = get_string('questionenginephase1', 'mod_icontent');
+    $description = get_string('questionenginephase1_help', 'mod_icontent');
+    $default = 0;
+    $settings->add(new admin_setting_configcheckbox($name, $title, $description, $default));
+
     // 20231230 Date format setting.
     $settings->add(new admin_setting_configtext(
         'mod_icontent/dateformat',

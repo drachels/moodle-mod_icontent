@@ -875,6 +875,193 @@ function icontent_ajax_replynote(stdClass $pagenote, stdClass $icontent) {
 }
 
 /**
+ * Process Phase 3 question engine actions for supported qtypes and return attempt records.
+ *
+ * @param array $postdata
+ * @param stdClass $cm
+ * @param int $pageid
+ * @return array
+ */
+function icontent_phase3_process_qengine_attempts(array $postdata, stdClass $cm, int $pageid): array {
+    global $CFG, $SESSION, $USER;
+
+    if (!icontent_question_engine_phase1_enabled()) {
+        return [];
+    }
+
+    if (empty($USER->id) || empty($SESSION->mod_icontent_quba) || !is_array($SESSION->mod_icontent_quba)) {
+        return [];
+    }
+
+    $sessionkey = icontent_question_engine_phase1_get_session_key($cm->id, $pageid, $USER->id);
+    $qubaid = $SESSION->mod_icontent_quba[$sessionkey] ?? 0;
+    if (empty($qubaid)) {
+        return [];
+    }
+
+    require_once($CFG->libdir.'/questionlib.php');
+
+    try {
+        $quba = question_engine::load_questions_usage_by_activity($qubaid);
+        $quba->process_all_actions(time(), $postdata);
+        question_engine::save_questions_usage_by_activity($quba);
+    } catch (Exception $e) {
+        return [];
+    }
+
+    $slotbyqid = [];
+    foreach ($quba->get_slots() as $slot) {
+        try {
+            $slotquestion = $quba->get_question($slot);
+            if (!empty($slotquestion->id)) {
+                $slotbyqid[(int)$slotquestion->id] = $slot;
+            }
+        } catch (Exception $e) {
+            continue;
+        }
+    }
+
+    $records = [];
+    $supportedqtypes = icontent_question_engine_phase1_supported_qtypes();
+    $pagequestions = icontent_get_pagequestions($pageid, $cm->id);
+    if (empty($pagequestions)) {
+        return [];
+    }
+
+    foreach ($pagequestions as $pagequestion) {
+        if (empty($pagequestion->qtype) || !in_array($pagequestion->qtype, $supportedqtypes)) {
+            continue;
+        }
+
+        $qid = (int)$pagequestion->qid;
+        if (empty($slotbyqid[$qid])) {
+            continue;
+        }
+
+        try {
+            $qa = $quba->get_question_attempt($slotbyqid[$qid]);
+            $submittedresponse = null;
+            $questiondef = $qa->get_question();
+            $expecteddata = method_exists($questiondef, 'get_expected_data') ? (array)$questiondef->get_expected_data() : [];
+            $submittedresponse = [];
+            $hasanswerfield = array_key_exists('answer', $expecteddata);
+            $submittedanswer = '';
+
+            foreach (array_keys($expecteddata) as $varname) {
+                $fieldname = $qa->get_qt_field_name($varname);
+                if (array_key_exists($fieldname, $postdata)) {
+                    $submittedresponse[$varname] = $postdata[$fieldname];
+                }
+            }
+
+            if (empty($submittedresponse)) {
+                foreach (array_keys($expecteddata) as $varname) {
+                    $lastvalue = $qa->get_last_qt_var($varname, null);
+                    if ($lastvalue !== null && $lastvalue !== '') {
+                        $submittedresponse[$varname] = $lastvalue;
+                    }
+                }
+            }
+
+            if ($hasanswerfield) {
+                $answerfield = $qa->get_qt_field_name('answer');
+                if (array_key_exists($answerfield, $postdata)) {
+                    $submittedanswer = trim((string)$postdata[$answerfield]);
+                } else {
+                    $submittedanswer = trim((string)$qa->get_last_qt_var('answer', ''));
+                }
+            }
+
+            if ($hasanswerfield
+                    && $pagequestion->qtype !== ICONTENT_QTYPE_MULTICHOICE
+                    && $pagequestion->qtype !== ICONTENT_QTYPE_ESSAY
+                    && $submittedanswer === '') {
+                continue;
+            }
+
+            if ($hasanswerfield && $submittedanswer !== '') {
+                $submittedresponse['answer'] = $submittedanswer;
+            }
+
+            if (empty($submittedresponse) && $pagequestion->qtype !== ICONTENT_QTYPE_ESSAY) {
+                $submittedresponse = null;
+            }
+
+            $lastqtdata = $qa->get_last_qt_data([]);
+            if (empty($lastqtdata) && $submittedresponse === null) {
+                continue;
+            }
+
+            if ($submittedresponse === null && method_exists($questiondef, 'is_complete_response')
+                    && !$questiondef->is_complete_response($lastqtdata)) {
+                continue;
+            }
+
+            $fraction = ($qa->get_fraction() === null) ? 0 : (float)$qa->get_fraction();
+            $rightanswer = (string)$qa->get_right_answer_summary();
+            $answertext = (string)$qa->get_response_summary();
+
+            if ($submittedresponse !== null) {
+                if (method_exists($questiondef, 'summarise_response')) {
+                    $summary = $questiondef->summarise_response($submittedresponse);
+                    if ($summary !== null && $summary !== '') {
+                        $answertext = (string)$summary;
+                    }
+                } else if (array_key_exists('answer', $submittedresponse)) {
+                    $answertext = (string)$submittedresponse['answer'];
+                }
+
+                if (method_exists($questiondef, 'grade_response')) {
+                    [$gradedfraction, ] = $questiondef->grade_response($submittedresponse);
+                    if ($gradedfraction !== null) {
+                        $fraction = (float)$gradedfraction;
+                    }
+                }
+
+                if ($pagequestion->qtype === ICONTENT_QTYPE_TRUEFALSE) {
+                    if ($answertext === '1') {
+                        $answertext = get_string('true', 'question');
+                    } else if ($answertext === '0') {
+                        $answertext = get_string('false', 'question');
+                    }
+                }
+            }
+
+            if ($pagequestion->qtype === ICONTENT_QTYPE_ESSAY) {
+                $fraction = 0;
+                $rightanswer = ICONTENT_QTYPE_ESSAY_STATUS_TOEVALUATE;
+
+                if ($answertext === '' && method_exists($questiondef, 'summarise_response')) {
+                    $fallbacksummary = $questiondef->summarise_response($lastqtdata);
+                    if ($fallbacksummary !== null && $fallbacksummary !== '') {
+                        $answertext = (string)$fallbacksummary;
+                    }
+                }
+
+                if ($answertext === '' && !empty($submittedresponse['answer'])) {
+                    $answertext = question_utils::to_plain_text((string)$submittedresponse['answer']);
+                }
+            }
+
+            $records[] = (object) [
+                'pagesquestionsid' => (int)$pagequestion->qpid,
+                'questionid' => $qid,
+                'userid' => (int)$USER->id,
+                'cmid' => (int)$cm->id,
+                'fraction' => $fraction,
+                'rightanswer' => $rightanswer,
+                'answertext' => $answertext,
+                'timecreated' => time(),
+            ];
+        } catch (Exception $e) {
+            continue;
+        }
+    }
+
+    return $records;
+}
+
+/**
  * Saves attempts to answers to the questions of the current page in table {icontent_question_attempt}.
  * @param string $formdata
  * @param stdClass $cm
@@ -887,6 +1074,14 @@ function icontent_ajax_saveattempt($formdata, stdClass $cm, $icontent) {
     // Get form data.
     parse_str($formdata, $data);
     $pageid = $data['pageid'];
+
+    // Phase 3: process question engine actions for supported qtypes.
+    $qenginerecords = icontent_phase3_process_qengine_attempts($data, $cm, (int)$pageid);
+    $qengineqids = [];
+    foreach ($qenginerecords as $record) {
+        $qengineqids[(int)$record->questionid] = true;
+    }
+
     // Destroy unused fields.
     unset($data['id']);
     unset($data['pageid']);
@@ -895,9 +1090,17 @@ function icontent_ajax_saveattempt($formdata, stdClass $cm, $icontent) {
     $i = 0;
     $records = [];
     foreach ($data as $key => $value) {
+        if (!preg_match('/^qpid-\d+_qid-\d+_[a-z0-9]+/i', $key)) {
+            continue;
+        }
         list($qpage, $question, $qtype) = explode('_', $key);
         list($strvar, $qpid) = explode('-', $qpage);
         list($strvar, $qid) = explode('-', $question);
+
+        if (isset($qengineqids[(int)$qid])) {
+            continue;
+        }
+
         $infoanswer = icontent_get_infoanswer_by_questionid($qid, $qtype, $value);
         $records[$i] = new stdClass();
         $records[$i]->pagesquestionsid = (int) $qpid;
@@ -910,6 +1113,17 @@ function icontent_ajax_saveattempt($formdata, stdClass $cm, $icontent) {
         $records[$i]->timecreated = time();
         $i ++;
     }
+
+    if (!empty($qenginerecords)) {
+        $records = array_merge($records, $qenginerecords);
+    }
+
+    if (empty($records)) {
+        $summary = new stdClass();
+        $summary->grid = icontent_make_questionsarea($DB->get_record('icontent_pages', ['id' => $pageid], '*', MUST_EXIST), $icontent);
+        return $summary;
+    }
+
     // Save records.
     $DB->insert_records('icontent_question_attempts', $records);
     // Update grade.

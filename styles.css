@@ -276,6 +276,51 @@
 	font-size: 13px;
 	padding-right: 10px;
 }
+.path-mod-icontent .questionsarea .question.match .optionslist{
+  overflow-x: auto;
+}
+.path-mod-icontent .questionsarea .question.match .optionslist .match-table{
+  width: 100%;
+  table-layout: fixed;
+}
+.path-mod-icontent .questionsarea .question.match .optionslist .match-table td{
+  vertical-align: top;
+  padding-bottom: 8px;
+}
+.path-mod-icontent .questionsarea .question.match .optionslist .match-table td.matchoptions{
+  width: 45%;
+  white-space: normal;
+  word-break: break-word;
+}
+.path-mod-icontent .questionsarea .question.match .optionslist .match-table td.matchanswer{
+  width: 55%;
+}
+.path-mod-icontent .questionsarea .question.match .optionslist .match-table td.matchanswer select.match-select{
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+.path-mod-icontent .questionsarea .question.match.qengine-render .ablock{
+  overflow-x: auto;
+}
+.path-mod-icontent .questionsarea .question.match.qengine-render table.answer{
+  width: 100%;
+  table-layout: fixed;
+}
+.path-mod-icontent .questionsarea .question.match.qengine-render table.answer td.text{
+  width: 45%;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.path-mod-icontent .questionsarea .question.match.qengine-render table.answer td.control{
+  width: 55%;
+}
+.path-mod-icontent .questionsarea .question.match.qengine-render table.answer td.control select.form-select{
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
 /** List of annotations **/
 .path-mod-icontent .icontent-page .notesarea .notelist .noterowicontent{
 	margin-left: 45px;
