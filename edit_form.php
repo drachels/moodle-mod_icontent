@@ -25,7 +25,6 @@
 defined('MOODLE_INTERNAL') || die;
 
 require_once($CFG->libdir.'/formslib.php');
-$PAGE->requires->js(new moodle_url($CFG->wwwroot.'/mod/icontent/js/jscolor/jscolor.js'));
 
 /**
  * Class mod_icontent_pages_edit_form
@@ -38,13 +37,16 @@ class icontent_pages_edit_form extends moodleform {
      * @throws dml_exception
      */
     public function definition() {
-        global $CFG, $COURSE, $PAGE;
+        global $CFG, $COURSE;
 
         $page = $this->_customdata['page'];
         $pageicontentoptions = $this->_customdata['pageicontentoptions'];
 
         $mform = $this->_form;
         $icontentconfig = get_config('mod_icontent');
+
+        $page->bgcolor = self::format_colour_for_picker($page->bgcolor ?? $icontentconfig->bgcolor ?? '#FCFCFC', '#FCFCFC');
+        $page->bordercolor = self::format_colour_for_picker($page->bordercolor ?? $icontentconfig->bordercolor ?? '#E4E4E4', '#E4E4E4');
 
         if (!empty($page->id)) {
             $mform->addElement('header', 'general', get_string('editingpage', 'icontent'));
@@ -145,74 +147,52 @@ class icontent_pages_edit_form extends moodleform {
         // ...$mform->setType('bgcolor', PARAM_TEXT);.
         // ...$mform->addHelpButton('bgcolor', 'bgcolorpagehelp', 'icontent');.
 
-        $PAGE->requires->js( new moodle_url(__FILE__ . '/lib/javascript-static.js'));
-
-        // 20240212 Modified setting for background color.
-        $attributes = ['class' => "color",
-                       'value' => $icontentconfig->bgcolor,
-                       'size' => "10",
-                      ];
-        $mform->setType('bgcolor', PARAM_NOTAGS);
-        // NOTE: When either of the next two lines are uncommented, the Background image file upload part
-        // of the form never finishes loading.
-        // ...$mform->addElement('html', '<div class="admin_colourpicker">');.
-        // ...$PAGE->requires->js_init_call('M.util.init_colour_picker', ['id', 'null']);.
-
-        $mform->addElement('text', 'bgcolor', get_string('bgcolor', 'icontent'), $attributes);
+        $bgattributes = ['id' => 'icontent_bgcolor_picker', 'size' => '10', 'maxlength' => '7'];
+        $mform->addElement('text', 'bgcolor', get_string('bgcolor', 'icontent'), $bgattributes);
+        $mform->setType('bgcolor', PARAM_TEXT);
         $mform->addHelpButton('bgcolor', 'bgcolorpagehelp', 'icontent');
+        $mform->setDefault('bgcolor', $page->bgcolor);
 
-        $mform->setDefault('bgcolor', $icontentconfig->bgcolor);
-
-        // 20240713 Color input experiments.
-        /*
-        $mform->addElement('html', '<label for="bgcolor">Color Picker:</label>
-            <input type="color" id="bgcolor" value="#0000ff">');
-        */
-        /*
-        $mform->addElement('html', '<label for="'.$icontentconfig->bgcolor.'">Color Picker:</label>
-            <input type="color" id="'.$icontentconfig->bgcolor.'" value="#0000ff">');
-        */
-
-        /*
-        $mform->addElement('html', '<label for="bgcolor">Color Picker:</label>
-            <input type="text" name="text">
-            <input type="color" name="color">
-            <input type="submit" name="btn_submit" value="Submit">');
-        */
-
-        // ========================================================================================
-        /*
-        $mform->addElement('html', '<label for="'.$icontentconfig->bgcolor.'">Color Picker:</label>
-            <input type="text" name="text">
-            <input type="color" name="color">
-            <input type="submit" name="btn_submit" value="Submit">');
-        */
-        // ========================================================================================
-
-        /*
-        // Background color setting.
-        $settings->add(new icontent_setting_configcolorpicker(
-            'mod_icontent/bgccolor',
-            get_string('bgccolor_title', 'icontent'),
-            get_string('bgccolor_descr', 'icontent'),
-            get_string('bgccolor_colour', 'icontent'),
-            null)
-        );
-        */
-
-        // ...$mform->addElement('text', 'bordercolor', get_string('bordercolor', 'icontent'), ['class' => 'color', 'value' => 'E4E4E4']);.
-        // ...$mform->setType('bordercolor', PARAM_TEXT);.
-        // ...$mform->addHelpButton('bordercolor', 'bordercolorpagehelp', 'icontent');.
-
-        // 20240212 Modified setting for bordercolor color.
-        $attributes = ['class' => "color",
-                       'value' => $icontentconfig->bordercolor,
-                       'size' => "10",
-                      ];
-        $mform->setType('bordercolor', PARAM_NOTAGS);
-        $mform->addElement('text', 'bordercolor', get_string('bordercolor', 'icontent'), $attributes);
+        $borderattributes = ['id' => 'icontent_bordercolor_picker', 'size' => '10', 'maxlength' => '7'];
+        $mform->addElement('text', 'bordercolor', get_string('bordercolor', 'icontent'), $borderattributes);
+        $mform->setType('bordercolor', PARAM_TEXT);
         $mform->addHelpButton('bordercolor', 'bgcolorpagehelp', 'icontent');
-        $mform->setDefault('bordercolor', $icontentconfig->bordercolor);
+        $mform->setDefault('bordercolor', $page->bordercolor);
+
+        $mform->addElement('html', "
+            <script>
+                (function() {
+                    var normalizeHex = function(value, fallback) {
+                        var raw = (value || '').toString().trim();
+                        if (raw.charAt(0) !== '#') {
+                            raw = '#' + raw;
+                        }
+                        if (!/^#[0-9a-fA-F]{6}$/.test(raw)) {
+                            return fallback;
+                        }
+                        return raw.toUpperCase();
+                    };
+
+                    var initColorInput = function(id, fallback) {
+                        var input = document.getElementById(id);
+                        if (!input) {
+                            return;
+                        }
+                        input.value = normalizeHex(input.value, fallback);
+                        input.type = 'color';
+                        input.style.width = '60px';
+                        input.style.height = '35px';
+                        input.style.cursor = 'pointer';
+                        input.addEventListener('change', function() {
+                            input.value = normalizeHex(input.value, fallback);
+                        });
+                    };
+
+                    initColorInput('icontent_bgcolor_picker', '#FCFCFC');
+                    initColorInput('icontent_bordercolor_picker', '#E4E4E4');
+                })();
+            </script>
+        ");
 
         $opts = icontent_add_borderwidth_options();
         $mform->addElement('select', 'borderwidth', get_string('borderwidth', 'icontent'), $opts);
@@ -277,5 +257,28 @@ class icontent_pages_edit_form extends moodleform {
 
         // Set the defaults.
         $this->set_data($page);
+    }
+
+    /**
+     * Format a color for color picker fields as #RRGGBB.
+     *
+     * @param string|null $value
+     * @param string $fallback
+     * @return string
+     */
+    protected static function format_colour_for_picker($value, $fallback) {
+        $default = strtoupper((string)$fallback);
+        if ($default === '' || $default[0] !== '#') {
+            $default = '#'.ltrim($default, '#');
+        }
+        if (!preg_match('/^#[0-9A-F]{6}$/', $default)) {
+            $default = '#FCFCFC';
+        }
+
+        $raw = '#'.strtoupper(ltrim(trim((string)$value), '#'));
+        if (!preg_match('/^#[0-9A-F]{6}$/', $raw)) {
+            return $default;
+        }
+        return $raw;
     }
 }

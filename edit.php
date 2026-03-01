@@ -86,6 +86,9 @@ if ($mform->is_cancelled()) {
     }
 
 } else if ($data = $mform->get_data()) {
+    $data->bgcolor = icontent_normalize_hex_colour($data->bgcolor, $icontent->bgcolor);
+    $data->bordercolor = icontent_normalize_hex_colour($data->bordercolor, $icontent->bordercolor);
+
     // 20240920 Added tags to the form.
     core_tag_tag::set_item_tags(
         'mod_icontent',
