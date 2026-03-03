@@ -59,9 +59,21 @@ This files describes API changes and other work in the iContent code.
 20260228 iContent - Updated addquestionpage.php to use a question-bank-like picker UX with
     category selection, cleaner columns, comments/statistics display, column action menus,
     and corrected Preview/Edit return flows back to the current iContent category/page.
-20260228i Content_1417 - Feature requests - Need a color selector for a slide background or
+20260228 iContent_1417 - Feature requests - Need a color selector for a slide background or
     border color. Added code to make color selectors similar to the one developed for the
     prompt_edit.php file in diary.
+20260302 iContent_1420 - Feature request - For manual marking type question set, Right answers,
+    to, Pending.
+20260302 iContent_1421 - Manual review and feedback enhancements for essay and poodllrecording
+    (picture/sketch) responses. Added reviewer comments, improved manual-review answer rendering,
+    and included submitted answers plus teacher comments in Result of the last attempt.
+20260302 iContent_1422 - Student essay response input now uses the site's default text editor
+    instead of a plain textarea in iContent question answering.
+20260302 iContent_1423 - Drag-and-drop/image question rendering fix. Added schema-safe question
+    file proxy handling in mod_icontent so question prompt images load correctly for students,
+    teachers, and admins; validated with 2 student accounts plus teacher and admin roles.
+
+
 
 === 1.0.7.2 === pending (Build: 2024061600) bumped version 2024061600
 

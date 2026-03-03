@@ -160,5 +160,22 @@ function xmldb_icontent_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2024082700, 'icontent');
     }
 
+    if ($oldversion < 2026030200) {
+
+        $table = new xmldb_table('icontent_question_attempts');
+
+        $field = new xmldb_field('reviewercomment', XMLDB_TYPE_TEXT, null, null, null, null, null, 'answertext');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        $field = new xmldb_field('reviewercommentformat', XMLDB_TYPE_INTEGER, '4', null, XMLDB_NOTNULL, null, '1', 'reviewercomment');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        upgrade_mod_savepoint(true, 2026030200, 'icontent');
+    }
+
     return true;
 }

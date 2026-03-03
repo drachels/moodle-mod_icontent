@@ -573,6 +573,107 @@ function icontent_pluginfile($course, $cm, $context, $filearea, $args, $forcedow
 
     require_course_login($course, true, $cm);
 
+    if ($filearea === 'qtypebgimage') {
+        $questionid = (int)array_shift($args);
+        $qtype = clean_param((string)array_shift($args), PARAM_ALPHANUMEXT);
+        $filename = clean_param((string)array_shift($args), PARAM_FILE);
+
+        if (empty($questionid) || empty($qtype) || empty($filename)) {
+            return false;
+        }
+
+        $question = $DB->get_record('question', ['id' => $questionid], 'id, qtype');
+        if (!$question || (string)$question->qtype !== $qtype) {
+            return false;
+        }
+
+        $fs = get_file_storage();
+        $filerecord = $DB->get_record_sql(
+            "SELECT id, contextid, itemid, filepath, filename
+               FROM {files}
+              WHERE component = ?
+                AND filearea = ?
+                AND itemid = ?
+                AND filename = ?
+                AND filesize > 0
+           ORDER BY id DESC",
+            ['qtype_' . $qtype, 'bgimage', $questionid, $filename],
+            IGNORE_MULTIPLE
+        );
+        if (!$filerecord) {
+            $filerecord = $DB->get_record_sql(
+                "SELECT id, contextid, itemid, filepath, filename
+                   FROM {files}
+                  WHERE component = ?
+                    AND filearea = ?
+                    AND itemid = ?
+                    AND filesize > 0
+               ORDER BY id DESC",
+                ['qtype_' . $qtype, 'bgimage', $questionid],
+                IGNORE_MULTIPLE
+            );
+        }
+        if (!$filerecord) {
+            return false;
+        }
+
+        $file = $fs->get_file((int)$filerecord->contextid, 'qtype_' . $qtype, 'bgimage',
+            (int)$filerecord->itemid, (string)$filerecord->filepath, (string)$filerecord->filename);
+        if (!$file || $file->is_directory()) {
+            return false;
+        }
+
+        send_stored_file($file, 0, 0, false, $options);
+        return true;
+    }
+
+    if ($filearea === 'questiontextproxy') {
+        $questionid = (int)array_shift($args);
+        $itemid = (int)array_shift($args);
+        $filename = clean_param((string)array_pop($args), PARAM_FILE);
+        $filepath = '/';
+        if (!empty($args)) {
+            $filepath = '/' . implode('/', array_map(function($part) {
+                return clean_param((string)$part, PARAM_PATH);
+            }, $args)) . '/';
+        }
+
+        if (empty($questionid) || empty($itemid) || $filename === '') {
+            return false;
+        }
+
+        $question = $DB->get_record('question', ['id' => $questionid], 'id');
+        if (!$question) {
+            return false;
+        }
+
+        $fs = get_file_storage();
+        $filerecord = $DB->get_record_sql(
+            "SELECT id, contextid, itemid, filepath, filename
+               FROM {files}
+              WHERE component = ?
+                AND filearea = ?
+                AND itemid = ?
+                AND filename = ?
+                AND filesize > 0
+           ORDER BY id DESC",
+            ['question', 'questiontext', $itemid, $filename],
+            IGNORE_MULTIPLE
+        );
+        if (!$filerecord) {
+            return false;
+        }
+
+        $file = $fs->get_file((int)$filerecord->contextid, 'question', 'questiontext', (int)$filerecord->itemid,
+            (string)$filerecord->filepath, (string)$filerecord->filename);
+        if (!$file || $file->is_directory()) {
+            return false;
+        }
+
+        send_stored_file($file, 0, 0, false, $options);
+        return true;
+    }
+
     $itemid = 0;
     switch ($filearea) {
         case 'page':
@@ -613,6 +714,36 @@ function icontent_pluginfile($course, $cm, $context, $filearea, $args, $forcedow
     // Finally send the file.
 
     return false;
+}
+
+/**
+ * Serve files that belong to questions attempted in mod_icontent QUBA usage.
+ *
+ * @param stdClass $course
+ * @param context $context
+ * @param string $component
+ * @param string $filearea
+ * @param int $qubaid
+ * @param int $slot
+ * @param array $args
+ * @param bool $forcedownload
+ * @param array $options
+ * @return void
+ */
+function mod_icontent_question_pluginfile($course, $context, $component,
+        $filearea, $qubaid, $slot, $args, $forcedownload, array $options = []) {
+
+    require_login($course);
+
+    $fs = get_file_storage();
+    $relativepath = implode('/', $args);
+    $fullpath = "/$context->id/$component/$filearea/$relativepath";
+
+    if (!$file = $fs->get_file_by_hash(sha1($fullpath)) || $file->is_directory()) {
+        send_file_not_found();
+    }
+
+    send_stored_file($file, 0, 0, $forcedownload, $options);
 }
 
 /**
@@ -883,7 +1014,7 @@ function icontent_ajax_replynote(stdClass $pagenote, stdClass $icontent) {
  * @return array
  */
 function icontent_phase3_process_qengine_attempts(array $postdata, stdClass $cm, int $pageid): array {
-    global $CFG, $SESSION, $USER;
+    global $CFG, $SESSION, $USER, $DB;
 
     if (!icontent_question_engine_phase1_enabled()) {
         return [];
@@ -940,6 +1071,16 @@ function icontent_phase3_process_qengine_attempts(array $postdata, stdClass $cm,
 
         try {
             $qa = $quba->get_question_attempt($slotbyqid[$qid]);
+            $ismanuallyreviewed = ($pagequestion->qtype === ICONTENT_QTYPE_ESSAY);
+            if (!$ismanuallyreviewed && $pagequestion->qtype === 'poodllrecording') {
+                static $poodllsketchcache = [];
+                if (!array_key_exists($qid, $poodllsketchcache)) {
+                    $responseformat = $DB->get_field('qtype_poodllrecording_opts', 'responseformat', ['questionid' => $qid]);
+                    $poodllsketchcache[$qid] = ($responseformat === 'picture');
+                }
+                $ismanuallyreviewed = $poodllsketchcache[$qid];
+            }
+
             $submittedresponse = null;
             $questiondef = $qa->get_question();
             $expecteddata = method_exists($questiondef, 'get_expected_data') ? (array)$questiondef->get_expected_data() : [];
@@ -974,7 +1115,7 @@ function icontent_phase3_process_qengine_attempts(array $postdata, stdClass $cm,
 
             if ($hasanswerfield
                     && $pagequestion->qtype !== ICONTENT_QTYPE_MULTICHOICE
-                    && $pagequestion->qtype !== ICONTENT_QTYPE_ESSAY
+                    && !$ismanuallyreviewed
                     && $submittedanswer === '') {
                 continue;
             }
@@ -983,7 +1124,7 @@ function icontent_phase3_process_qengine_attempts(array $postdata, stdClass $cm,
                 $submittedresponse['answer'] = $submittedanswer;
             }
 
-            if (empty($submittedresponse) && $pagequestion->qtype !== ICONTENT_QTYPE_ESSAY) {
+            if (empty($submittedresponse) && !$ismanuallyreviewed) {
                 $submittedresponse = null;
             }
 
@@ -1027,7 +1168,7 @@ function icontent_phase3_process_qengine_attempts(array $postdata, stdClass $cm,
                 }
             }
 
-            if ($pagequestion->qtype === ICONTENT_QTYPE_ESSAY) {
+            if ($ismanuallyreviewed) {
                 $fraction = 0;
                 $rightanswer = ICONTENT_QTYPE_ESSAY_STATUS_TOEVALUATE;
 

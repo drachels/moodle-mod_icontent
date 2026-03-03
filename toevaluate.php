@@ -51,15 +51,21 @@ $tquestinstance = icontent_get_totalquestions_by_instance($cm->id);
 if ($action) {
     // Receives values.
     $questions = optional_param_array('question', [], PARAM_RAW);
+    $questioncomments = optional_param_array('questioncomment', [], PARAM_RAW);
+    $questioncommentformats = optional_param_array('questioncommentformat', [], PARAM_INT);
     $i = 0;
+    $update = false;
     if ($questions) {
         foreach ($questions as $qname => $qvalue) {
             list($strname, $answerid) = explode('-', $qname);
             $qvalue = $qvalue > 1 ? 1 : $qvalue;
+            $commentkey = 'attemptid-' . $answerid;
             $attempt = new stdClass();
             $attempt->id = $answerid;
             $attempt->fraction = $qvalue;
             $attempt->rightanswer = ICONTENT_QTYPE_ESSAY_STATUS_VALUED;
+            $attempt->reviewercomment = $questioncomments[$commentkey] ?? '';
+            $attempt->reviewercommentformat = $questioncommentformats[$commentkey] ?? FORMAT_HTML;
             // Save values.
             $update = icontent_update_question_attempts($attempt);
             $i ++;
@@ -84,17 +90,44 @@ echo $OUTPUT->header();
 echo $OUTPUT->heading($icontent->name);
 echo $OUTPUT->heading(get_string('manualreviewofparticipant', 'mod_icontent', fullname($user)), 3);
 $qopenanswers = icontent_get_questions_and_open_answers_by_user($user->id, $cm->id, $status);
+$preferredformat = editors_get_preferred_format($context);
+$preferrededitor = editors_get_preferred_editor($preferredformat);
 echo html_writer::start_tag('form', ['method' => 'post']);
 if ($qopenanswers) {
     foreach ($qopenanswers as $qopenanswer) {
         $fieldname = 'question[attemptid-'.$qopenanswer->id.']';
         $fieldid = 'idquestion-'.$qopenanswer->questionid.'_pqid-'.$qopenanswer->pagesquestionsid.'_'.ICONTENT_QTYPE_ESSAY;
+        $commentfieldname = 'questioncomment[attemptid-'.$qopenanswer->id.']';
+        $commentformatname = 'questioncommentformat[attemptid-'.$qopenanswer->id.']';
+        $commentfieldid = 'idcomment-'.$qopenanswer->id;
         $fraction = ($status === ICONTENT_QTYPE_ESSAY_STATUS_VALUED) ? $qopenanswer->fraction : ''; // Check status.
+        $reviewercomment = (string)($qopenanswer->reviewercomment ?? '');
+        $reviewercommentformat = (int)($qopenanswer->reviewercommentformat ?? $preferredformat);
         // Get page.
         $page = $DB->get_record('icontent_pages', ['id' => $qopenanswer->pageid], 'id, title, pagenum', MUST_EXIST);
         $attempttitle = html_writer::tag('strong', get_string('strattempttitle', 'mod_icontent', $page));
         $qtext = html_writer::div($qopenanswer->questiontext, 'qtext');
-        $qanswer = html_writer::div($qopenanswer->answertext, 'answer qtype_essay_editor qtype_essay_response readonly');
+        $qanswercontent = icontent_render_manual_review_answer($qopenanswer, (int)$cm->id);
+        $qanswer = html_writer::div($qanswercontent, 'answer qtype_essay_editor qtype_essay_response readonly');
+        $commentlabel = html_writer::label(get_string('comments', 'mod_icontent'), $commentfieldid, false, ['class' => 'labelfieldcomment']);
+        $commentfield = html_writer::tag('textarea', s($reviewercomment), [
+            'id' => $commentfieldid,
+            'name' => $commentfieldname,
+            'rows' => 6,
+            'class' => 'form-control',
+        ]);
+        $commentformatfield = html_writer::empty_tag('input', [
+            'type' => 'hidden',
+            'name' => $commentformatname,
+            'value' => $reviewercommentformat,
+        ]);
+        if ($preferrededitor) {
+            $preferrededitor->use_editor($commentfieldid, [
+                'context' => $context,
+                'autosave' => false,
+            ]);
+        }
+        $commentblock = html_writer::div($commentlabel . $commentfield . $commentformatfield, 'cblock mt-2');
         $ablock = html_writer::div($qanswer, 'ablock');
         $skipline = html_writer::empty_tag('br');
         $labelgrade = html_writer::label(get_string('gradenoun', 'icontent').$skipline, $fieldid, null,
@@ -114,7 +147,7 @@ if ($qopenanswers) {
         );
         $labelmaxgrade = html_writer::label(get_string('strmaxgrade', 'mod_icontent'), null);
         $divgrade = html_writer::div($labelgrade. $fieldfraction. $labelmaxgrade, 'gblock');
-        $content = html_writer::div($qtext.$ablock. $divgrade, 'formulation');
+          $content = html_writer::div($qtext.$ablock.$commentblock.$divgrade, 'formulation');
         echo html_writer::div($attempttitle.$content, 'que manualgraded '.ICONTENT_QTYPE_ESSAY,
             [
                'id' => 'idq'.$qopenanswer->questionid,

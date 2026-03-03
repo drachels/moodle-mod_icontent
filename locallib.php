@@ -271,10 +271,139 @@ function icontent_question_engine_phase2_render_question($objpage, $question, $d
     }
 
     $displayoptions = new question_display_options();
+    $renderedhtml = $quba->render_question($slot, $displayoptions, (string)$displaynumber);
+
+    $renderedhtml = icontent_qengine_rewrite_questiontext_pluginfile_urls(
+        (string)$renderedhtml,
+        (int)$question->qid,
+        (int)$objpage->cmid
+    );
+
+    if (in_array((string)$question->qtype, ['ddimageortext', 'ddmarker'])) {
+        $renderedhtml = icontent_qengine_embed_dd_background_data_uri(
+            (string)$renderedhtml,
+            (int)$question->qid,
+            (string)$question->qtype,
+            (int)$objpage->cmid
+        );
+    }
+
     return html_writer::div(
-        $quba->render_question($slot, $displayoptions, (string)$displaynumber),
+        $renderedhtml,
         'question '.s($question->qtype).' qengine-render'
     );
+}
+
+/**
+ * Rewrite questiontext pluginfile URLs in rendered question HTML to mod_icontent proxy URLs.
+ *
+ * @param string $renderedhtml
+ * @param int $questionid
+ * @param int $cmid
+ * @return string
+ */
+function icontent_qengine_rewrite_questiontext_pluginfile_urls(string $renderedhtml, int $questionid, int $cmid): string {
+    global $CFG;
+
+    $cmcontext = context_module::instance($cmid, IGNORE_MISSING);
+    if (!$cmcontext) {
+        return $renderedhtml;
+    }
+
+    $wwwroot = preg_quote($CFG->wwwroot, '/');
+    $pattern = '/(' . $wwwroot . '\/pluginfile\.php\/\d+\/question\/questiontext\/\d+\/\d+\/)(\d+)(\/[^"\?\s]+)(\?[^"\s]*)?/i';
+
+    $rewritten = preg_replace_callback($pattern, static function(array $matches) use ($cmcontext, $questionid, $CFG) {
+        $itemid = (int)$matches[2];
+        $filepathandname = ltrim((string)$matches[3], '/');
+        $query = isset($matches[4]) ? (string)$matches[4] : '';
+
+        $proxypath = '/' . $cmcontext->id . '/mod_icontent/questiontextproxy/' .
+            $questionid . '/' . $itemid . '/' . $filepathandname;
+
+        return file_encode_url($CFG->wwwroot . '/pluginfile.php', $proxypath, false) . $query;
+    }, $renderedhtml);
+
+    return $rewritten ?? $renderedhtml;
+}
+
+/**
+ * Replace drag-drop background image URL with a data URI fallback when available.
+ *
+ * @param string $renderedhtml
+ * @param int $questionid
+ * @param string $qtype
+ * @param int $cmid
+ * @return string
+ */
+function icontent_qengine_embed_dd_background_data_uri(string $renderedhtml, int $questionid, string $qtype, int $cmid): string {
+    global $DB, $CFG;
+
+    $contextid = (int)$DB->get_field('question', 'contextid', ['id' => $questionid]);
+    if (empty($contextid)) {
+        return $renderedhtml;
+    }
+
+    $component = 'qtype_' . $qtype;
+    $fs = get_file_storage();
+    $files = $fs->get_area_files($contextid, $component, 'bgimage', $questionid, 'id ASC', false);
+    if (empty($files)) {
+        return $renderedhtml;
+    }
+
+    $imagefile = reset($files);
+    if (!$imagefile) {
+        return $renderedhtml;
+    }
+
+    $cmcontext = context_module::instance($cmid, IGNORE_MISSING);
+    if ($cmcontext && $imagefile->get_filename() !== '.') {
+        $proxypath = '/' . $cmcontext->id . '/mod_icontent/qtypebgimage/' .
+            $questionid . '/' . $qtype . '/' . $imagefile->get_filename();
+        $proxysrc = file_encode_url($CFG->wwwroot . '/pluginfile.php', $proxypath, false);
+
+        $rewrittenhtml = preg_replace_callback(
+            '/<img([^>]*class="[^"]*dropbackground[^"]*"[^>]*)>/i',
+            static function(array $matches) use ($proxysrc) {
+                $imgtag = $matches[0];
+                if (preg_match('/\ssrc="[^"]*"/i', $imgtag)) {
+                    return preg_replace('/\ssrc="[^"]*"/i', ' src="' . s($proxysrc) . '"', $imgtag, 1);
+                }
+                return str_replace('<img', '<img src="' . s($proxysrc) . '"', $imgtag);
+            },
+            $renderedhtml,
+            1
+        );
+
+        if (!empty($rewrittenhtml)) {
+            return $rewrittenhtml;
+        }
+    }
+
+    $mimetype = (string)$imagefile->get_mimetype();
+    if (strpos($mimetype, 'image/') !== 0) {
+        return $renderedhtml;
+    }
+
+    $content = $imagefile->get_content();
+    if ($content === false || $content === '') {
+        return $renderedhtml;
+    }
+
+    $datasrc = 'data:' . $mimetype . ';base64,' . base64_encode($content);
+
+    return preg_replace_callback(
+        '/<img([^>]*class="[^"]*dropbackground[^"]*"[^>]*)>/i',
+        static function(array $matches) use ($datasrc) {
+            $imgtag = $matches[0];
+            if (preg_match('/\ssrc="[^"]*"/i', $imgtag)) {
+                return preg_replace('/\ssrc="[^"]*"/i', ' src="' . s($datasrc) . '"', $imgtag, 1);
+            }
+            return str_replace('<img', '<img src="' . s($datasrc) . '"', $imgtag);
+        },
+        $renderedhtml,
+        1
+    ) ?? $renderedhtml;
 }
 
 /**
@@ -932,12 +1061,26 @@ function icontent_count_attempts_users_with_open_answers($cmid, $status = null) 
         $status = ICONTENT_QTYPE_ESSAY_STATUS_TOEVALUATE;
     }
     // SQL Query.
-    $sql = "SELECT Count(DISTINCT u.id) AS totalattemptsusers
+        $sql = "SELECT Count(DISTINCT u.id) AS totalattemptsusers
               FROM {user} u
         INNER JOIN {icontent_question_attempts} qa
                 ON u.id = qa.userid
              WHERE  qa.cmid = ?
-               AND qa.rightanswer IN (?);";
+                             AND (
+                                        qa.rightanswer IN (?)
+                                        OR (
+                                                qa.fraction = 0
+                                                AND EXISTS (
+                                                        SELECT 1
+                                                            FROM {question} q
+                                                            JOIN {qtype_poodllrecording_opts} qpo
+                                                                ON qpo.questionid = q.id
+                                                         WHERE q.id = qa.questionid
+                                                             AND q.qtype = 'poodllrecording'
+                                                             AND qpo.responseformat = 'picture'
+                                                )
+                                        )
+                             );";
     $totalattemptsusers = $DB->get_record_sql($sql, [$cmid, $status]);
     return (int) $totalattemptsusers->totalattemptsusers;
 }
@@ -1105,7 +1248,7 @@ function icontent_get_attempts_users($cmid, $sort, $page = 0, $perpage = ICONTEN
         $namefields = $userfieldsapi->get_sql('u', false, '', 'id', false)->selects;;
     }
 
-    $sql = "SELECT DISTINCT $namefields,
+        $sql = "SELECT DISTINCT $namefields,
                 (SELECT Sum(fraction)
                    FROM {icontent_question_attempts}
                   WHERE userid = u.id
@@ -1115,10 +1258,24 @@ function icontent_get_attempts_users($cmid, $sort, $page = 0, $perpage = ICONTEN
                           WHERE userid = u.id
                             AND cmid = ?) AS totalanswers,
                                 (SELECT Count(id)
-                                   FROM {icontent_question_attempts}
+                                                                     FROM {icontent_question_attempts} qa2
                                   WHERE userid = u.id
                                     AND cmid = ?
-                                    AND rightanswer IN (?)) AS totalopenanswers
+                                                                        AND (
+                                                                                qa2.rightanswer IN (?)
+                                                                                OR (
+                                                                                        qa2.fraction = 0
+                                                                                        AND EXISTS (
+                                                                                                SELECT 1
+                                                                                                    FROM {question} q
+                                                                                                    JOIN {qtype_poodllrecording_opts} qpo
+                                                                                                        ON qpo.questionid = q.id
+                                                                                                 WHERE q.id = qa2.questionid
+                                                                                                     AND q.qtype = 'poodllrecording'
+                                                                                                     AND qpo.responseformat = 'picture'
+                                                                                        )
+                                                                                )
+                                                                        )) AS totalopenanswers
              FROM {user} u
        INNER JOIN {icontent_question_attempts} qa
                ON u.id = qa.userid
@@ -1175,17 +1332,45 @@ function icontent_get_attempts_users_with_open_answers($cmid, $sort, $status = n
         $namefields = $userfieldsapi->get_sql('u', false, '', 'id', false)->selects;;
     }
 
-    $sql = "SELECT DISTINCT $namefields,
+        $sql = "SELECT DISTINCT $namefields,
                 (SELECT Count(id)
-                   FROM {icontent_question_attempts}
+                                     FROM {icontent_question_attempts} qa2
                   WHERE userid = u.id
                     AND cmid = ?
-                    AND rightanswer IN (?)) AS totalopenanswers
+                                        AND (
+                                                qa2.rightanswer IN (?)
+                                                OR (
+                                                        qa2.fraction = 0
+                                                        AND EXISTS (
+                                                                SELECT 1
+                                                                    FROM {question} q
+                                                                    JOIN {qtype_poodllrecording_opts} qpo
+                                                                        ON qpo.questionid = q.id
+                                                                 WHERE q.id = qa2.questionid
+                                                                     AND q.qtype = 'poodllrecording'
+                                                                     AND qpo.responseformat = 'picture'
+                                                        )
+                                                )
+                                        )) AS totalopenanswers
              FROM {user} u
        INNER JOIN {icontent_question_attempts} qa
                ON u.id = qa.userid
             WHERE qa.cmid = ?
-              AND qa.rightanswer IN (?)
+                            AND (
+                                        qa.rightanswer IN (?)
+                                        OR (
+                                                qa.fraction = 0
+                                                AND EXISTS (
+                                                        SELECT 1
+                                                            FROM {question} q
+                                                            JOIN {qtype_poodllrecording_opts} qpo
+                                                                ON qpo.questionid = q.id
+                                                         WHERE q.id = qa.questionid
+                                                             AND q.qtype = 'poodllrecording'
+                                                             AND qpo.responseformat = 'picture'
+                                                )
+                                        )
+                            )
          ORDER BY {$sortparams}";
     $params = [
         $cmid,
@@ -1276,14 +1461,28 @@ function icontent_get_open_answers_by_attempt_summary_by_page($pageid, $cmid) {
         return (object)['totalopenanswers' => 0];
     }
 
-    $sql = "SELECT Count(qa.id) AS totalopenanswers
+        $sql = "SELECT Count(qa.id) AS totalopenanswers
               FROM {icontent_question_attempts} qa
         INNER JOIN {icontent_pages_questions} pq
                 ON qa.pagesquestionsid = pq.id
              WHERE pq.pageid = ?
                AND pq.cmid = ?
                AND qa.userid = ?
-               AND qa.rightanswer IN (?)
+                             AND (
+                                        qa.rightanswer IN (?)
+                                        OR (
+                                                qa.fraction = 0
+                                                AND EXISTS (
+                                                        SELECT 1
+                                                            FROM {question} q
+                                                            JOIN {qtype_poodllrecording_opts} qpo
+                                                                ON qpo.questionid = q.id
+                                                         WHERE q.id = qa.questionid
+                                                             AND q.qtype = 'poodllrecording'
+                                                             AND qpo.responseformat = 'picture'
+                                                )
+                                        )
+                             )
                AND qa.timecreated = ?";
     return $DB->get_record_sql($sql, [$pageid, $cmid, $USER->id, ICONTENT_QTYPE_ESSAY_STATUS_TOEVALUATE, $latestattempttime]);
 }
@@ -1337,20 +1536,316 @@ function icontent_get_questions_and_open_answers_by_user($userid, $cmid, $status
                    qa.questionid,
                    qa.pagesquestionsid,
                    qa.answertext,
+                   qa.reviewercomment,
+                   qa.reviewercommentformat,
                    qa.fraction,
                    qa.timecreated,
                    q.questiontext,
+               q.qtype,
+               qpo.responseformat,
                    pq.pageid
               FROM {icontent_question_attempts} qa
         INNER JOIN {question} q
                 ON qa.questionid = q.id
+        LEFT JOIN {qtype_poodllrecording_opts} qpo
+               ON qpo.questionid = q.id
         INNER JOIN {icontent_pages_questions} pq
                 ON qa.pagesquestionsid = pq.id
              WHERE qa.cmid = ?
                AND qa.userid = ?
-               AND qa.rightanswer IN (?);";
+               AND (
+                    qa.rightanswer IN (?)
+                    OR (
+                        qa.fraction = 0
+                        AND q.qtype = 'poodllrecording'
+                        AND qpo.responseformat = 'picture'
+                    )
+               );";
     // Get records and return.
     return $DB->get_records_sql($sql, [$cmid, $userid, $status]);
+}
+
+/**
+ * Render manual-review answer content for supported question types.
+ *
+ * @param stdClass $qopenanswer
+ * @param int $cmid
+ * @return string
+ */
+function icontent_render_manual_review_answer(stdClass $qopenanswer, int $cmid): string {
+    $answertext = (string)($qopenanswer->answertext ?? '');
+    $qtype = (string)($qopenanswer->qtype ?? '');
+    $responseformat = (string)($qopenanswer->responseformat ?? '');
+
+    if ($qtype === 'poodllrecording' && $responseformat === 'picture' && $answertext !== '') {
+        $filename = icontent_extract_poodll_response_filename($answertext);
+        $imagesrc = icontent_get_poodll_response_image_url($filename, (int)$qopenanswer->userid, $cmid);
+        if (!empty($imagesrc)) {
+            return html_writer::empty_tag('img', [
+                'src' => $imagesrc,
+                'alt' => s($filename),
+                'class' => 'img-fluid icontent-manualreview-image',
+                'style' => 'max-width: 100%; height: auto;',
+            ]);
+        }
+    }
+
+    return format_text($answertext, FORMAT_HTML, [
+        'noclean' => false,
+        'para' => false,
+    ]);
+}
+
+/**
+ * Extract a PoodLL drawing filename from stored response text.
+ *
+ * @param string $answertext
+ * @return string
+ */
+function icontent_extract_poodll_response_filename(string $answertext): string {
+    $answertext = trim(strip_tags($answertext));
+    if ($answertext === '') {
+        return '';
+    }
+
+    if (preg_match('/(upfile_drawingboard_[0-9]+\.(?:png|jpe?g|gif|webp))/i', $answertext, $matches)) {
+        return $matches[1];
+    }
+
+    $path = parse_url($answertext, PHP_URL_PATH);
+    if (!empty($path)) {
+        $basename = basename($path);
+        if (preg_match('/\.(?:png|jpe?g|gif|webp)$/i', $basename)) {
+            return $basename;
+        }
+    }
+
+    if (preg_match('/\.(?:png|jpe?g|gif|webp)$/i', $answertext)) {
+        return $answertext;
+    }
+
+    return '';
+}
+
+/**
+ * Locate metadata for a stored PoodLL sketch response image.
+ *
+ * @param string $filename
+ * @param int $userid
+ * @param int $cmid
+ * @return stdClass|null
+ */
+function icontent_get_poodll_response_image_file_record(string $filename, int $userid, int $cmid): ?stdClass {
+    global $DB;
+
+    if ($filename === '') {
+        return null;
+    }
+
+    $sql = "SELECT f.contextid,
+                   f.itemid,
+                   f.filepath,
+                   f.filename,
+                   f.mimetype
+              FROM {files} f
+              JOIN {context} c
+                ON c.id = f.contextid
+             WHERE f.component = 'question'
+               AND f.filearea = 'response_answer'
+               AND f.filename = ?
+               AND f.userid = ?
+               AND c.contextlevel = ?
+               AND c.instanceid = ?
+               AND f.filesize > 0
+          ORDER BY f.timemodified DESC";
+    $file = $DB->get_record_sql($sql, [$filename, $userid, CONTEXT_MODULE, $cmid], IGNORE_MULTIPLE);
+
+    if (!$file) {
+        $fallbacksql = "SELECT f.contextid,
+                               f.itemid,
+                               f.filepath,
+                               f.filename,
+                               f.mimetype
+                          FROM {files} f
+                          JOIN {context} c
+                            ON c.id = f.contextid
+                         WHERE f.component = 'question'
+                           AND f.filearea = 'response_answer'
+                           AND f.filename = ?
+                           AND c.contextlevel = ?
+                           AND c.instanceid = ?
+                           AND f.filesize > 0
+                      ORDER BY f.timemodified DESC";
+        $file = $DB->get_record_sql($fallbacksql, [$filename, CONTEXT_MODULE, $cmid], IGNORE_MULTIPLE);
+    }
+
+    return $file ?: null;
+}
+
+/**
+ * Locate a stored PoodLL sketch response image and return a pluginfile URL.
+ *
+ * @param string $filename
+ * @param int $userid
+ * @param int $cmid
+ * @return string
+ */
+function icontent_get_poodll_response_image_url(string $filename, int $userid, int $cmid): string {
+    global $CFG;
+
+    require_once($CFG->libdir . '/filelib.php');
+    require_once($CFG->libdir . '/filestorage/file_storage.php');
+
+    $filename = icontent_extract_poodll_response_filename($filename);
+    if ($filename === '') {
+        return '';
+    }
+
+    $file = icontent_get_poodll_response_image_file_record($filename, $userid, $cmid);
+
+    if (!$file) {
+        return '';
+    }
+
+    $mimetype = (string)$file->mimetype;
+    if ($mimetype === '' || strpos($mimetype, 'image/') !== 0) {
+        return '';
+    }
+
+    $filestorage = get_file_storage();
+    $storedfile = $filestorage->get_file(
+        (int)$file->contextid,
+        'question',
+        'response_answer',
+        (int)$file->itemid,
+        (string)$file->filepath,
+        (string)$file->filename
+    );
+
+    if ($storedfile) {
+        $content = $storedfile->get_content();
+        if ($content !== false && $content !== '') {
+            return 'data:' . $mimetype . ';base64,' . base64_encode($content);
+        }
+    }
+
+    $path = '/' . $file->contextid . '/question/response_answer/' . $file->itemid . $file->filepath . $file->filename;
+    return file_encode_url($CFG->wwwroot . '/pluginfile.php', $path, false);
+}
+
+/**
+ * Get latest submitted PoodLL sketch answers by page for current user.
+ *
+ * @param int $pageid
+ * @param int $cmid
+ * @return array
+ */
+function icontent_get_poodll_sketch_answers_by_attempt_summary_by_page($pageid, $cmid) {
+    global $DB, $USER;
+
+    $latestattempttime = icontent_get_latest_attempt_timecreated_by_page($pageid, $cmid, $USER->id);
+    if (empty($latestattempttime)) {
+        return [];
+    }
+
+    $sql = "SELECT qa.id,
+                   qa.userid,
+                   qa.answertext,
+                   q.name AS questionname,
+                   q.qtype,
+                   qpo.responseformat
+              FROM {icontent_question_attempts} qa
+        INNER JOIN {icontent_pages_questions} pq
+                ON qa.pagesquestionsid = pq.id
+        INNER JOIN {question} q
+                ON q.id = qa.questionid
+         LEFT JOIN {qtype_poodllrecording_opts} qpo
+                ON qpo.questionid = q.id
+             WHERE pq.pageid = ?
+               AND pq.cmid = ?
+               AND qa.userid = ?
+               AND qa.timecreated = ?
+               AND q.qtype = 'poodllrecording'
+               AND qpo.responseformat = 'picture'
+               AND qa.answertext IS NOT NULL
+               AND qa.answertext <> ''
+          ORDER BY qa.id ASC";
+
+    return $DB->get_records_sql($sql, [$pageid, $cmid, $USER->id, $latestattempttime]);
+}
+
+/**
+ * Get latest submitted answers by page for current user.
+ *
+ * @param int $pageid
+ * @param int $cmid
+ * @return array
+ */
+function icontent_get_submitted_answers_by_attempt_summary_by_page($pageid, $cmid) {
+    global $DB, $USER;
+
+    $latestattempttime = icontent_get_latest_attempt_timecreated_by_page($pageid, $cmid, $USER->id);
+    if (empty($latestattempttime)) {
+        return [];
+    }
+
+    $sql = "SELECT qa.id,
+                   qa.userid,
+                   qa.answertext,
+                   qa.questionid,
+                   q.name AS questionname,
+                   q.qtype,
+                   qpo.responseformat
+              FROM {icontent_question_attempts} qa
+        INNER JOIN {icontent_pages_questions} pq
+                ON qa.pagesquestionsid = pq.id
+        INNER JOIN {question} q
+                ON q.id = qa.questionid
+         LEFT JOIN {qtype_poodllrecording_opts} qpo
+                ON qpo.questionid = q.id
+             WHERE pq.pageid = ?
+               AND pq.cmid = ?
+               AND qa.userid = ?
+               AND qa.timecreated = ?
+          ORDER BY qa.id ASC";
+
+    return $DB->get_records_sql($sql, [$pageid, $cmid, $USER->id, $latestattempttime]);
+}
+
+/**
+ * Get reviewer comments attached to the latest attempt summary on a page.
+ *
+ * @param int $pageid
+ * @param int $cmid
+ * @return array
+ */
+function icontent_get_reviewer_comments_by_attempt_summary_by_page($pageid, $cmid) {
+    global $DB, $USER;
+
+    $latestattempttime = icontent_get_latest_attempt_timecreated_by_page($pageid, $cmid, $USER->id);
+    if (empty($latestattempttime)) {
+        return [];
+    }
+
+    $sql = "SELECT qa.id,
+                   qa.questionid,
+                   qa.reviewercomment,
+                   qa.reviewercommentformat,
+                   q.name AS questionname
+              FROM {icontent_question_attempts} qa
+        INNER JOIN {icontent_pages_questions} pq
+                ON qa.pagesquestionsid = pq.id
+        INNER JOIN {question} q
+                ON q.id = qa.questionid
+             WHERE pq.pageid = ?
+               AND pq.cmid = ?
+               AND qa.userid = ?
+               AND qa.timecreated = ?
+               AND qa.reviewercomment IS NOT NULL
+               AND qa.reviewercomment <> ''
+          ORDER BY qa.id ASC";
+
+    return $DB->get_records_sql($sql, [$pageid, $cmid, $USER->id, $latestattempttime]);
 }
 
 /**
@@ -2305,18 +2800,31 @@ function icontent_make_questions_answers_by_type($question, $objpage = null, $di
             break;
         case ICONTENT_QTYPE_ESSAY:
             $fieldname = 'qpid-'.$question->qpid.'_qid-'.$question->qid.'_'.ICONTENT_QTYPE_ESSAY;
-            $qoptions = $DB->get_records('qtype_essay_options', ['questionid' => $question->qid]);
+            $fieldid = 'idfield-qpid:'.$question->qpid.'_qid:'.$question->qid.'_'.ICONTENT_QTYPE_ESSAY;
+            $context = null;
+            if (!empty($objpage) && !empty($objpage->cmid)) {
+                $context = context_module::instance((int)$objpage->cmid);
+            }
+            $preferredformat = $context ? editors_get_preferred_format($context) : FORMAT_HTML;
+            $preferrededitor = editors_get_preferred_editor($preferredformat);
             $questionanswers = html_writer::start_div('question essay');
             $questionanswers .= html_writer::div(strip_tags($question->questiontext, '<b><strong>'), 'questiontext');
             // 20240204 Modified params. See ticket iContent_1188.
             $questionanswers .= html_writer::tag('textarea', null,
                 [
                     'name' => $fieldname,
+                    'id' => $fieldid,
                     'class' => 'col-12 answertextarea',
                     'required' => 'required',
                     'placeholder' => get_string('writeessay', 'mod_icontent'),
                 ]
             );
+            if ($preferrededitor) {
+                $preferrededitor->use_editor($fieldid, [
+                    'context' => $context,
+                    'autosave' => false,
+                ]);
+            }
             $questionanswers .= html_writer::end_div();
             return $questionanswers;
             break;
@@ -2391,6 +2899,9 @@ function icontent_make_attempt_summary_by_page($pageid, $cmid) {
     $totalrightanswers = $rightanswer->totalrightanswers;
     $stropenanswer = $openanswer->totalopenanswers ?
         get_string('stropenanswer', 'mod_icontent', $openanswer->totalopenanswers) : '';
+    if (!empty($openanswer->totalopenanswers) && (int)$totalrightanswers === 0) {
+        $totalrightanswers = get_string('pendingreview', 'mod_icontent');
+    }
     // String.
     $evaluate = new stdClass();
     $evaluate->fraction = number_format($summaryattempt->sumfraction, 2);
@@ -2403,7 +2914,49 @@ function icontent_make_attempt_summary_by_page($pageid, $cmid) {
 
     // Create table summary attempt.
     $tablesummary = html_writer::table($summarygrid);
-    return html_writer::div($title. $tablesummary, 'questionsarea', ['id' => 'idquestionsarea']);
+    $answershtml = '';
+    $submittedanswers = icontent_get_submitted_answers_by_attempt_summary_by_page($pageid, $cmid);
+    if (!empty($submittedanswers)) {
+        $answeritems = [];
+        foreach ($submittedanswers as $submittedanswer) {
+            $questionlabel = html_writer::tag('strong', format_string($submittedanswer->questionname) . ': ');
+            $answercontent = icontent_render_manual_review_answer($submittedanswer, $cmid);
+            $answeritems[] = html_writer::tag('li', $questionlabel . $answercontent, ['class' => 'mb-3']);
+        }
+
+        $answershtml = html_writer::div(
+            html_writer::tag('h5', get_string('answers', 'mod_icontent')) .
+            html_writer::tag('ul', implode('', $answeritems), ['class' => 'list-unstyled mb-0']),
+            'icontent-submitted-answers mt-2'
+        );
+    }
+
+    $commentshtml = '';
+    $reviewercomments = icontent_get_reviewer_comments_by_attempt_summary_by_page($pageid, $cmid);
+    if (!empty($reviewercomments)) {
+        $commentstitle = get_string('comments', 'mod_icontent');
+        if (get_string_manager()->string_exists('reviewercomments', 'mod_icontent')) {
+            $commentstitle = get_string('reviewercomments', 'mod_icontent');
+        }
+
+        $items = [];
+        foreach ($reviewercomments as $comment) {
+            $questionlabel = html_writer::tag('strong', format_string($comment->questionname) . ': ');
+            $commenttext = format_text((string)$comment->reviewercomment, (int)$comment->reviewercommentformat, [
+                'noclean' => false,
+                'para' => false,
+            ]);
+            $items[] = html_writer::tag('li', $questionlabel . $commenttext, ['class' => 'mb-3']);
+        }
+
+        $commentshtml = html_writer::div(
+            html_writer::tag('h5', $commentstitle) .
+            html_writer::tag('ul', implode('', $items), ['class' => 'list-unstyled mb-0']),
+            'icontent-reviewer-comments mt-2'
+        );
+    }
+
+    return html_writer::div($title . $tablesummary . $answershtml . $commentshtml, 'questionsarea', ['id' => 'idquestionsarea']);
 }
 
 /**
@@ -2994,13 +3547,16 @@ function icontent_make_toolbar($page, $icontent) {
         // Edit mode (view.php). Icons for teachers.
         if ($USER->editing && has_any_capability(['mod/icontent:edit', 'mod/icontent:manage'], $context)) {
             // Add new question.
+            $addquestionparams = [
+                'id' => $page->cmid,
+                'pageid' => $page->id,
+            ];
+            $questioncategoryid = icontent_get_page_primary_questioncategoryid((int)$page->id, (int)$page->cmid);
+            if (!empty($questioncategoryid)) {
+                $addquestionparams['questioncategoryid'] = $questioncategoryid;
+            }
             $addquestion = html_writer::link(
-                new moodle_url('addquestionpage.php',
-                    [
-                        'id' => $page->cmid,
-                        'pageid' => $page->id,
-                    ]
-                ),
+                new moodle_url('addquestionpage.php', $addquestionparams),
                 '<i class="fa fa-question-circle fa-lg"></i>',
                 [
                     'title' => s(get_string('addquestion', 'mod_icontent')),
@@ -3053,6 +3609,30 @@ function icontent_make_toolbar($page, $icontent) {
     );
     // Return toolbar.
     return $toolbar;
+}
+
+/**
+ * Get the first question bank category used by questions on this iContent page.
+ *
+ * @param int $pageid
+ * @param int $cmid
+ * @return int
+ */
+function icontent_get_page_primary_questioncategoryid($pageid, $cmid) {
+        global $DB;
+
+        $sql = "SELECT qbe.questioncategoryid
+                            FROM {icontent_pages_questions} pq
+                            JOIN {question_versions} qv
+                                ON qv.questionid = pq.questionid
+                            JOIN {question_bank_entries} qbe
+                                ON qbe.id = qv.questionbankentryid
+                         WHERE pq.pageid = ?
+                             AND pq.cmid = ?
+                    ORDER BY pq.id ASC";
+        $categoryid = $DB->get_field_sql($sql, [$pageid, $cmid], IGNORE_MULTIPLE);
+
+        return $categoryid ? (int)$categoryid : 0;
 }
 
 /**

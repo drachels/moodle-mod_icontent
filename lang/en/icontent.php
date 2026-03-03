@@ -218,6 +218,8 @@ $string['pagenotfound'] = '<i class="fa fa-exclamation-triangle" aria-hidden="tr
 $string['pages'] = '<span>Pages</span>';
 $string['pagetitle'] = 'Page title';
 $string['partialresult'] = 'Partial result';
+$string['pendingreview'] = 'Pending';
+$string['reviewercomments'] = 'Teacher comments';
 $string['password'] = 'Password';
 
 $string['pluginadministration'] = 'Content Pages Administration';
