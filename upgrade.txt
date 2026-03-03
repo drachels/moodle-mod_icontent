@@ -72,7 +72,9 @@ This files describes API changes and other work in the iContent code.
 20260302 iContent_1423 - Drag-and-drop/image question rendering fix. Added schema-safe question
     file proxy handling in mod_icontent so question prompt images load correctly for students,
     teachers, and admins; validated with 2 student accounts plus teacher and admin roles.
-
+20260303 iContent_1422 - Feature Request - Need some basic Behat tests for iContent Pages.
+    Began adding .feature files in the test/behat, folder. Will add more, as needed.
+    See mod/icontent/tests/behat/README.md for the current feature map and run commands.
 
 
 === 1.0.7.2 === pending (Build: 2024061600) bumped version 2024061600
