@@ -85,6 +85,7 @@ $string['columns4'] = 'Until four columns';
 $string['columns5'] = 'Until five columns';
 $string['comments'] = 'Comments';
 $string['confdeleteattempt'] = 'Remove attempt the page {$a->pagenum}';
+$string['confirmremovequestion'] = 'Are you sure you want to remove this question from the page?';
 $string['configpassword_desc'] = 'Whether a password is required in order to access the lesson.';
 
 $string['confpagedelete'] = 'Do you want to delete this page along with all files and records related to it?';

@@ -1,6 +1,6 @@
 # iContent Behat tests
 
-Last updated: 2026-03-03
+Last updated: 2026-03-04
 
 This folder contains iContent-specific Behat coverage focused on plugin behavior, not core Moodle qtype internals.
 
@@ -17,6 +17,9 @@ This folder contains iContent-specific Behat coverage focused on plugin behavior
   - `multichoice`,
   - `shortanswer`,
   - `match`.
+- Question-management coverage in edit mode:
+  - per-question remove icon visibility,
+  - remove action result for linked questions.
 - Installation-specific inventory coverage for this server:
   - additional non-core qtypes configured in `Questions Testing`,
   - full page/question mapping inventory for `Questions Testing`.
@@ -29,6 +32,7 @@ This folder contains iContent-specific Behat coverage focused on plugin behavior
 - `icontent_answers_and_comments.feature`
 - `icontent_default_qtypes.feature`
 - `icontent_default_qtypes_autograded.feature`
+- `icontent_question_management.feature`
 - `icontent_capabilities.feature`
 - `icontent_local_additional_qtypes.feature` (`@local`)
 - `icontent_local_questions_testing_inventory.feature` (`@local`)
@@ -73,7 +77,7 @@ If you prefer direct `php` commands (no `.sh` runner), use Moodle's Behat runner
 Default/portable smoke scenarios:
 
 ```bash
-php admin/tool/behat/cli/run.php --config /var/moodledata/behatmoodledatadev/behatrun/behat/behat.yml --format=progress /var/www/moodledev/mod/icontent/tests/behat/icontent_student_flow.feature /var/www/moodledev/mod/icontent/tests/behat/icontent_teacher_grading.feature /var/www/moodledev/mod/icontent/tests/behat/icontent_reviewer_comments.feature /var/www/moodledev/mod/icontent/tests/behat/icontent_answers_and_comments.feature /var/www/moodledev/mod/icontent/tests/behat/icontent_default_qtypes.feature /var/www/moodledev/mod/icontent/tests/behat/icontent_default_qtypes_autograded.feature
+php admin/tool/behat/cli/run.php --config /var/moodledata/behatmoodledatadev/behatrun/behat/behat.yml --format=progress /var/www/moodledev/mod/icontent/tests/behat/icontent_student_flow.feature /var/www/moodledev/mod/icontent/tests/behat/icontent_teacher_grading.feature /var/www/moodledev/mod/icontent/tests/behat/icontent_reviewer_comments.feature /var/www/moodledev/mod/icontent/tests/behat/icontent_answers_and_comments.feature /var/www/moodledev/mod/icontent/tests/behat/icontent_default_qtypes.feature /var/www/moodledev/mod/icontent/tests/behat/icontent_default_qtypes_autograded.feature /var/www/moodledev/mod/icontent/tests/behat/icontent_question_management.feature
 ```
 
 Local installation scenarios only:

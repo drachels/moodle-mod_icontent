@@ -288,8 +288,10 @@ function icontent_question_engine_phase2_render_question($objpage, $question, $d
         );
     }
 
+    $questiontools = icontent_make_question_tools($question, $objpage);
+
     return html_writer::div(
-        $renderedhtml,
+        $questiontools.$renderedhtml,
         'question '.s($question->qtype).' qengine-render'
     );
 }
@@ -1917,25 +1919,44 @@ function icontent_add_pagedisplayed($pageid, $cmid) {
  */
 function icontent_add_questionpage($questions, $pageid, $cmid) {
     global $DB;
-    $records = [];
-    if ($questions) {
-        // Remove questions this page.
-        $DB->delete_records('icontent_pages_questions', ['pageid' => $pageid, 'cmid' => $cmid]);
-        // Create array of objects questionpage.
-        $i = 0;
-        foreach ($questions as $question) {
-            $records[$i] = new stdClass;
-            $records[$i]->pageid = $pageid;
-            $records[$i]->questionid = $question;
-            $records[$i]->cmid = $cmid;
-            $records[$i]->timecreated = time();
-            $i ++;
-        }
-        // Persists objects.
-        $DB->insert_records('icontent_pages_questions', $records);
-        return true;
+    if (empty($questions)) {
+        return false;
     }
-    return false;
+
+    $selectedquestionids = array_unique(array_map('intval', $questions));
+    $selectedquestionids = array_values(array_filter($selectedquestionids));
+    if (empty($selectedquestionids)) {
+        return false;
+    }
+
+    $existing = $DB->get_records_menu(
+        'icontent_pages_questions',
+        ['pageid' => $pageid, 'cmid' => $cmid],
+        '',
+        'id, questionid'
+    );
+    $existingquestionids = array_map('intval', array_values($existing));
+
+    $timecreated = time();
+    $records = [];
+    foreach ($selectedquestionids as $questionid) {
+        if (in_array($questionid, $existingquestionids, true)) {
+            continue;
+        }
+
+        $record = new stdClass;
+        $record->pageid = $pageid;
+        $record->questionid = $questionid;
+        $record->cmid = $cmid;
+        $record->timecreated = $timecreated;
+        $records[] = $record;
+    }
+
+    if (!empty($records)) {
+        $DB->insert_records('icontent_pages_questions', $records);
+    }
+
+    return true;
 }
 
 /**
@@ -2654,6 +2675,59 @@ function icontent_make_questionsarea($objpage, $icontent) {
 }
 
 /**
+ * Build per-question tools (e.g. remove) for edit mode on view page.
+ *
+ * @param object $question
+ * @param object|null $objpage
+ * @return string
+ */
+function icontent_make_question_tools($question, $objpage = null) {
+    global $USER;
+
+    if (empty($objpage) || empty($question->qpid)) {
+        return '';
+    }
+
+    if (!property_exists($USER, 'editing') || empty($USER->editing)) {
+        return '';
+    }
+
+    $context = context_module::instance((int)$objpage->cmid);
+    if (!has_any_capability(['mod/icontent:edit', 'mod/icontent:manage'], $context)) {
+        return '';
+    }
+
+    if (icontent_checks_answers_of_currentpage((int)$objpage->id, (int)$objpage->cmid)) {
+        return '';
+    }
+
+    $removeurl = new moodle_url('/mod/icontent/view.php', [
+        'id' => (int)$objpage->cmid,
+        'pageid' => (int)$objpage->id,
+        'removeqpid' => (int)$question->qpid,
+        'sesskey' => sesskey(),
+    ]);
+    $confirmmessage = get_string('confirmremovequestion', 'mod_icontent');
+    if (preg_match('/^\[\[.*\]\]$/', $confirmmessage)) {
+        $confirmmessage = 'Are you sure you want to remove this question from the page?';
+    }
+
+    $removeicon = html_writer::link(
+        $removeurl,
+        '<i class="fa fa-times-circle fa-lg"></i>',
+        [
+            'title' => s(get_string('remove', 'mod_icontent')),
+            'class' => 'icon icon-removequestion',
+            'data-toggle' => 'tooltip',
+            'data-placement' => 'top',
+            'onclick' => 'return confirm('.json_encode($confirmmessage).');',
+        ]
+    );
+
+    return html_writer::div($removeicon, 'question-tools text-end mb-2');
+}
+
+/**
  * This is the function responsible for creating the answers of questions area.
  *
  * Patterns for field names and values of question types:
@@ -2682,6 +2756,8 @@ function icontent_make_questions_answers_by_type($question, $objpage = null, $di
         }
     }
 
+    $questiontools = icontent_make_question_tools($question, $objpage);
+
     switch ($question->qtype) {
         case ICONTENT_QTYPE_MULTICHOICE:
             $answers = $DB->get_records('question_answers', ['question' => $question->qid]);
@@ -2708,6 +2784,7 @@ function icontent_make_questions_answers_by_type($question, $objpage = null, $di
             }
             $strpromptinfo = html_writer::span($strprompt, 'label label-info');
             $questionanswers = html_writer::start_div('question '.ICONTENT_QTYPE_MULTICHOICE);
+            $questionanswers .= $questiontools;
             $questionanswers .= html_writer::div(strip_tags($question->questiontext, '<b><strong>'), 'questiontext');
             $questionanswers .= html_writer::div($strpromptinfo, 'prompt');
             $questionanswers .= html_writer::start_div('optionslist'); // Start div options list.
@@ -2735,6 +2812,7 @@ function icontent_make_questions_answers_by_type($question, $objpage = null, $di
         case ICONTENT_QTYPE_MATCH:
             $options = $DB->get_records('qtype_match_subquestions', ['questionid' => $question->qid], 'answertext');
             $questionanswers = html_writer::start_div('question '.ICONTENT_QTYPE_MATCH);
+            $questionanswers .= $questiontools;
             $questionanswers .= html_writer::div(strip_tags($question->questiontext, '<b><strong>'), 'questiontext mr-2');
             $questionanswers .= html_writer::start_div('optionslist'); // Start div options list.
             $contenttable = '';
@@ -2775,6 +2853,7 @@ function icontent_make_questions_answers_by_type($question, $objpage = null, $di
             shuffle($answers); // 20240718 Trying to shuffle the answers for true/false question. Appears to work!
             $strpromptinfo = html_writer::span(get_string('choiceoneoption', 'mod_icontent'), 'label label-info'.'test3');
             $questionanswers = html_writer::start_div('question '.ICONTENT_QTYPE_TRUEFALSE);
+            $questionanswers .= $questiontools;
             $questionanswers .= html_writer::div(strip_tags($question->questiontext, '<b><strong>'), 'questiontext');
             $questionanswers .= html_writer::div($strpromptinfo, 'prompt');
             $questionanswers .= html_writer::start_div('optionslist'); // Start div options list.
@@ -2808,6 +2887,7 @@ function icontent_make_questions_answers_by_type($question, $objpage = null, $di
             $preferredformat = $context ? editors_get_preferred_format($context) : FORMAT_HTML;
             $preferrededitor = editors_get_preferred_editor($preferredformat);
             $questionanswers = html_writer::start_div('question essay');
+            $questionanswers .= $questiontools;
             $questionanswers .= html_writer::div(strip_tags($question->questiontext, '<b><strong>'), 'questiontext');
             // 20240204 Modified params. See ticket iContent_1188.
             $questionanswers .= html_writer::tag('textarea', null,

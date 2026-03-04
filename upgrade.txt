@@ -72,7 +72,21 @@ This files describes API changes and other work in the iContent code.
 20260302 iContent_1423 - Drag-and-drop/image question rendering fix. Added schema-safe question
     file proxy handling in mod_icontent so question prompt images load correctly for students,
     teachers, and admins; validated with 2 student accounts plus teacher and admin roles.
-20260303 iContent_1422 - Feature Request - Need some basic Behat tests for iContent Pages.
+20260304 iContent_1424bt - Improved question-management UX for iContent pages.
+    Updated addquestionpage behavior to add/merge selected questions without deleting existing
+    page questions, preventing accidental loss when browsing category pages. Also added a direct
+    per-question remove action in view edit mode (blocked when attempts already exist on page).
+20260304 iContent_1425bt - Follow-up fix for per-question remove controls in edit mode.
+    Ensured remove icon/tool renders for Question Engine-rendered questions and added a
+    client-side confirmation prompt before removing a question from the page.
+20260304 iContent_1426gt - Hardening and regression coverage for question remove action.
+    Added fallback confirmation text when language string resolution returns a missing-string
+    token and introduced Behat scenario coverage for edit-mode remove icon visibility plus
+    successful question unlink action.
+20260304 iContent_1427bt - Added remove-control guard regression scenario.
+    Added Behat coverage to verify the per-question remove icon is hidden in edit mode when
+    attempts already exist on the page.
+20260304 iContent_1426 - Feature Request - Need some basic Behat tests for iContent Pages.
     Began adding .feature files in the test/behat, folder. Will add more, as needed.
     See mod/icontent/tests/behat/README.md for the current feature map and run commands.
 

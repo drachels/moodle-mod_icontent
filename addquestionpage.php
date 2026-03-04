@@ -56,6 +56,13 @@ if ($id) {
 if (!$pageid) {
     throw new moodle_exception(get_string('incorrectpage', 'icontent'));
 }
+
+$currentpage = $DB->get_record('icontent_pages', [
+    'id' => $pageid,
+    'cmid' => $cm->id,
+    'icontentid' => $icontent->id,
+], 'id, title, pagenum', MUST_EXIST);
+
 // Require login.
 require_login($course, true, $cm);
 $context = context_module::instance($cm->id);
@@ -66,8 +73,9 @@ require_capability('mod/icontent:newquestion', $context);
 
 // Print the page header.
 $PAGE->set_url('/mod/icontent/addquestionpage.php', ['id' => $cm->id, 'pageid' => $pageid]);
-$PAGE->set_title(format_string($icontent->name));
+$PAGE->set_title(format_string($icontent->name) . ' - ' . format_string($currentpage->title));
 $PAGE->set_heading(format_string($course->fullname));
+$PAGE->add_body_class('icontent-addquestionpage');
 // CSS.
 $PAGE->requires->css(new moodle_url($CFG->wwwroot.'/mod/icontent/styles/font-awesome-4.6.2/css/font-awesome.min.css'));
 $hascommentplugin = \core\plugininfo\qbank::is_plugin_enabled('qbank_comment');
@@ -96,8 +104,7 @@ if ($action) {
 
 // Output starts here.
 echo $OUTPUT->header();
-echo $OUTPUT->heading($icontent->name. ": ". get_string('addquestion', 'mod_icontent'));
-
+echo $OUTPUT->heading(format_string($currentpage->title) . ": " . get_string('addquestion', 'mod_icontent'));
 
 // Get info.
 $sort = icontent_check_value_sort($sort);

@@ -33,6 +33,7 @@ $id = optional_param('id', 0, PARAM_INT); // Course_module ID.
 $n  = optional_param('n', 0, PARAM_INT); // Icontent instance ID.
 $edit = optional_param('edit', -1, PARAM_BOOL); // Edit mode.
 $pageid = optional_param('pageid', null, PARAM_INT); // Chapter ID.
+$removeqpid = optional_param('removeqpid', 0, PARAM_INT);
 
 if ($pageid !== null && $pageid <= 0) {
     throw new invalid_parameter_exception('Invalid pageid value');
@@ -102,6 +103,45 @@ $completion->set_module_viewed($cm);
 // Check permissions.
 $allowedit = has_capability('mod/icontent:edit', $context);
 $edit = icontent_has_permission_edition($allowedit, $edit);
+
+if ($removeqpid > 0) {
+    require_sesskey();
+    if (!has_any_capability(['mod/icontent:edit', 'mod/icontent:manage'], $context)) {
+        throw new required_capability_exception($context, 'mod/icontent:edit', 'nopermissions', '');
+    }
+
+    if ($pageid === null) {
+        throw new moodle_exception(get_string('incorrectpage', 'icontent'));
+    }
+
+    $pagerecord = $DB->get_record('icontent_pages', [
+        'id' => $pageid,
+        'cmid' => $cm->id,
+        'icontentid' => $icontent->id,
+    ], '*', MUST_EXIST);
+
+    if (icontent_checks_answers_of_currentpage((int)$pagerecord->id, (int)$cm->id)) {
+        redirect(
+            new moodle_url('/mod/icontent/view.php', ['id' => $cm->id, 'pageid' => $pageid]),
+            get_string('msgstatusdisplay', 'mod_icontent'),
+            null,
+            \core\output\notification::NOTIFY_WARNING
+        );
+    }
+
+    $questionmapping = $DB->get_record('icontent_pages_questions', [
+        'id' => $removeqpid,
+        'pageid' => $pageid,
+        'cmid' => $cm->id,
+    ], '*', MUST_EXIST);
+
+    icontent_remove_questionpagebyid((int)$questionmapping->id);
+
+    redirect(
+        new moodle_url('/mod/icontent/view.php', ['id' => $cm->id, 'pageid' => $pageid]),
+        get_string('msgsucessexclusion', 'mod_icontent')
+    );
+}
 
 // Read pages.
 $pages = icontent_info::icontent_preload_pages($icontent);

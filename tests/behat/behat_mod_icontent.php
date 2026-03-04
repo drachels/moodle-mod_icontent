@@ -320,6 +320,85 @@ class behat_mod_icontent extends behat_base {
     }
 
     /**
+     * Link an existing question to an iContent page without creating attempts.
+     *
+     * @Given /^the icontent "(?P<activity_string>(?:[^"\\]|\\.)*)" page "(?P<pagetitle_string>(?:[^"\\]|\\.)*)" links question "(?P<questionname_string>(?:[^"\\]|\\.)*)"$/
+     *
+     * @param string $activity
+     * @param string $pagetitle
+     * @param string $questionname
+     */
+    public function the_icontent_page_links_question(
+        string $activity,
+        string $pagetitle,
+        string $questionname
+    ): void {
+        global $DB;
+
+        $cm = $this->get_icontent_cm_by_name($activity);
+        $page = $this->get_icontent_page_by_title($activity, $pagetitle);
+        $question = $DB->get_record('question', ['name' => $questionname], '*', MUST_EXIST);
+
+        $exists = $DB->record_exists('icontent_pages_questions', [
+            'pageid' => $page->id,
+            'questionid' => $question->id,
+            'cmid' => $cm->id,
+        ]);
+
+        if ($exists) {
+            return;
+        }
+
+        $timecreated = time();
+        $DB->insert_record('icontent_pages_questions', (object)[
+            'pageid' => $page->id,
+            'questionid' => $question->id,
+            'cmid' => $cm->id,
+            'timecreated' => $timecreated,
+            'timemodified' => $timecreated,
+            'maxmark' => 1,
+            'remake' => 0,
+            'qtype' => $question->qtype,
+        ]);
+    }
+
+    /**
+     * Remove a linked question from an iContent page as the current user.
+     *
+     * @When /^I remove question "(?P<questionname_string>(?:[^"\\]|\\.)*)" from page "(?P<pagetitle_string>(?:[^"\\]|\\.)*)" in icontent "(?P<activity_string>(?:[^"\\]|\\.)*)"$/
+     *
+     * @param string $questionname
+     * @param string $pagetitle
+     * @param string $activity
+     */
+    public function i_remove_question_from_page_in_icontent(
+        string $questionname,
+        string $pagetitle,
+        string $activity
+    ): void {
+        global $DB;
+
+        $cm = $this->get_icontent_cm_by_name($activity);
+        $page = $this->get_icontent_page_by_title($activity, $pagetitle);
+        $question = $DB->get_record('question', ['name' => $questionname], '*', MUST_EXIST);
+
+        $mapping = $DB->get_record('icontent_pages_questions', [
+            'pageid' => $page->id,
+            'questionid' => $question->id,
+            'cmid' => $cm->id,
+        ], '*', MUST_EXIST);
+
+        $url = new moodle_url('/mod/icontent/view.php', [
+            'id' => $cm->id,
+            'pageid' => $page->id,
+            'removeqpid' => $mapping->id,
+            'sesskey' => sesskey(),
+        ]);
+
+        $this->getSession()->visit($this->locate_path($url->out_as_local_url(false)));
+    }
+
+    /**
      * Assert that an iContent activity includes at least one linked question of a given qtype.
      *
      * @Then /^the icontent "(?P<activity_string>(?:[^"\\]|\\.)*)" should include question type "(?P<qtype_string>(?:[^"\\]|\\.)*)"$/
@@ -381,6 +460,42 @@ class behat_mod_icontent extends behat_base {
             throw new ExpectationException(
                 'Expected mapping not found in iContent "' . $activity . '": page "' . $pagetitle .
                 '", question "' . $questionname . '", qtype "' . $qtype . '".',
+                $this->getSession()
+            );
+        }
+    }
+
+    /**
+     * Assert that an iContent activity does not include a specific page/question mapping.
+     *
+     * @Then /^the icontent "(?P<activity_string>(?:[^"\\]|\\.)*)" should not include page "(?P<pagetitle_string>(?:[^"\\]|\\.)*)" with question "(?P<questionname_string>(?:[^"\\]|\\.)*)"$/
+     *
+     * @param string $activity
+     * @param string $pagetitle
+     * @param string $questionname
+     */
+    public function the_icontent_should_not_include_page_with_question(
+        string $activity,
+        string $pagetitle,
+        string $questionname
+    ): void {
+        global $DB;
+
+        $cm = $this->get_icontent_cm_by_name($activity);
+
+        $sql = "SELECT 1
+                  FROM {icontent_pages} p
+                  JOIN {icontent_pages_questions} pq ON pq.pageid = p.id
+                  JOIN {question} q ON q.id = pq.questionid
+                 WHERE p.cmid = ?
+                   AND p.title = ?
+                   AND q.name = ?";
+        $exists = $DB->record_exists_sql($sql, [$cm->id, $pagetitle, $questionname]);
+
+        if ($exists) {
+            throw new ExpectationException(
+                'Unexpected mapping exists in iContent "' . $activity . '": page "' . $pagetitle .
+                '", question "' . $questionname . '".',
                 $this->getSession()
             );
         }
