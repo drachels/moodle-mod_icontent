@@ -27,8 +27,9 @@ require_once(dirname(__FILE__).'/locallib.php');
 
 $id = required_param('id', PARAM_INT); // Course Module ID.
 $pageid = optional_param('pageid', 0, PARAM_INT); // Page note ID.
-$action = optional_param('action', 0, PARAM_ALPHA); // Action.
+$action = optional_param('action', 'grading', PARAM_ALPHA); // Action.
 $status = optional_param('status', ICONTENT_QTYPE_ESSAY_STATUS_TOEVALUATE, PARAM_ALPHA); // Status.
+$group = optional_param('group', 0, PARAM_INT); // Group filter.
 $sort = optional_param('sort', '', PARAM_ALPHA);
 $page = optional_param('page', 0, PARAM_INT);
 $perpage = optional_param('perpage', ICONTENT_PER_PAGE, PARAM_INT);
@@ -42,7 +43,7 @@ require_login($course, false, $cm);
 $context = context_module::instance($cm->id);
 require_capability('mod/icontent:grade', $context);
 // Page setting.
-$PAGE->set_url('/mod/icontent/grading.php', ['id' => $cm->id, 'action' => $action]);
+$PAGE->set_url('/mod/icontent/grading.php', ['id' => $cm->id, 'action' => $action, 'status' => $status, 'group' => $group]);
 // Header and strings.
 $PAGE->set_title($icontent->name);
 $PAGE->set_heading($course->fullname);
@@ -54,11 +55,30 @@ $PAGE->requires->css(new moodle_url($CFG->wwwroot.'/mod/icontent/styles/font-awe
 echo $OUTPUT->header();
 echo $OUTPUT->heading($icontent->name);
 echo $OUTPUT->heading(get_string('strmanualgrading', 'mod_icontent'), 3);
+$gradesurl = new moodle_url('/mod/icontent/grade.php', ['id' => $id, 'action' => 'overview', 'group' => $group]);
+$manualreviewurl = new moodle_url('/mod/icontent/grading.php', ['id' => $id, 'action' => 'grading', 'status' => $status, 'group' => $group]);
+$modetoggle = html_writer::div(
+    html_writer::link($gradesurl, get_string('grades'), ['class' => 'btn btn-secondary mr-2']).
+    html_writer::link($manualreviewurl, get_string('manualreview', 'mod_icontent'), ['class' => 'btn btn-primary']),
+    'mb-3 icontent-results-mode-toggle'
+);
+echo $modetoggle;
+$currentgroup = 0;
+if (groups_get_activity_groupmode($cm) != NOGROUPS) {
+    $currentgroup = groups_get_activity_group($cm, true);
+    if ($currentgroup) {
+        $group = $currentgroup;
+    }
+    $groupmenuurl = new moodle_url('/mod/icontent/grading.php', ['id' => $id, 'action' => $action, 'status' => $status]);
+    echo groups_print_activity_menu($cm, $groupmenuurl, true);
+}
+
 $url = new moodle_url('/mod/icontent/grading.php',
     [
         'id' => $id,
         'action' => $action,
         'status' => $status,
+        'group' => $group,
         'page' => $page,
         'perpage' => $perpage,
     ]
@@ -66,8 +86,8 @@ $url = new moodle_url('/mod/icontent/grading.php',
 // Get sort value.
 $sort = icontent_check_value_sort($sort);
 // Get answers not evaluated.
-$attemptsusers = icontent_get_attempts_users_with_open_answers($cm->id, $sort, $status, $page, $perpage);
-$tattemtpsusers = icontent_count_attempts_users_with_open_answers($cm->id, $status);
+$attemptsusers = icontent_get_attempts_users_with_open_answers($cm->id, $sort, $status, $page, $perpage, $group);
+$tattemtpsusers = icontent_count_attempts_users_with_open_answers($cm->id, $status, $group);
 // Make message info.
 $clickhere = html_writer::link(
     new moodle_url('/mod/icontent/grading.php',
@@ -75,6 +95,7 @@ $clickhere = html_writer::link(
             'id' => $cm->id,
             'action' => 'grading',
             'status' => 'valued',
+            'group' => $group,
             'page' => $page,
             'perpage' => $perpage,
         ]

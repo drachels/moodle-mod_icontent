@@ -1033,17 +1033,29 @@ function icontent_count_questions_of_questionbank($coursecontext) {
  * Returns int of total attempts users.
  *
  * @param object $cmid
+ * @param int $groupid
  * @return int of $tattemptsusers
  */
-function icontent_count_attempts_users($cmid) {
+function icontent_count_attempts_users($cmid, $groupid = 0) {
     global $DB;
 
     $sql = "SELECT Count(DISTINCT u.id) AS totalattemptsusers
               FROM {user} u
         INNER JOIN {icontent_question_attempts} qa
                 ON u.id = qa.userid
-             WHERE  qa.cmid = ?;";
-    $totalattemptsusers = $DB->get_record_sql($sql, [$cmid]);
+                         WHERE  qa.cmid = ?";
+        $params = [$cmid];
+        if (!empty($groupid)) {
+                $sql .= "
+                             AND EXISTS (
+                                        SELECT 1
+                                            FROM {groups_members} gm
+                                         WHERE gm.userid = u.id
+                                             AND gm.groupid = ?
+                             )";
+                $params[] = $groupid;
+        }
+        $totalattemptsusers = $DB->get_record_sql($sql, $params);
     return (int) $totalattemptsusers->totalattemptsusers;
 }
 
@@ -1054,9 +1066,10 @@ function icontent_count_attempts_users($cmid) {
  *
  * @param object $cmid
  * @param null $status
+ * @param int $groupid
  * @return int of $tattemptsusers
  */
-function icontent_count_attempts_users_with_open_answers($cmid, $status = null) {
+function icontent_count_attempts_users_with_open_answers($cmid, $status = null, $groupid = 0) {
     global $DB;
     // Check if status is filled in.
     if (!isset($status)) {
@@ -1082,8 +1095,19 @@ function icontent_count_attempts_users_with_open_answers($cmid, $status = null) 
                                                              AND qpo.responseformat = 'picture'
                                                 )
                                         )
-                             );";
-    $totalattemptsusers = $DB->get_record_sql($sql, [$cmid, $status]);
+                                                         )";
+        $params = [$cmid, $status];
+        if (!empty($groupid)) {
+                $sql .= "
+                             AND EXISTS (
+                                        SELECT 1
+                                            FROM {groups_members} gm
+                                         WHERE gm.userid = u.id
+                                             AND gm.groupid = ?
+                             )";
+                $params[] = $groupid;
+        }
+        $totalattemptsusers = $DB->get_record_sql($sql, $params);
     return (int) $totalattemptsusers->totalattemptsusers;
 }
 
@@ -1223,9 +1247,10 @@ function icontent_get_infoanswer_by_questionid($questionid, $qtype, $answer) {
  * @param string $sort
  * @param int $page
  * @param int $perpage
+ * @param int $groupid
  * @return object $attemptusers, otherwhise false.
  */
-function icontent_get_attempts_users($cmid, $sort, $page = 0, $perpage = ICONTENT_PER_PAGE) {
+function icontent_get_attempts_users($cmid, $sort, $page = 0, $perpage = ICONTENT_PER_PAGE, $groupid = 0) {
     global $CFG, $DB;
     $sortparams = 'u.lastname '.$sort;
     $page = (int) $page;
@@ -1281,8 +1306,7 @@ function icontent_get_attempts_users($cmid, $sort, $page = 0, $perpage = ICONTEN
              FROM {user} u
        INNER JOIN {icontent_question_attempts} qa
                ON u.id = qa.userid
-            WHERE qa.cmid = ?
-            ORDER BY $sortparams";
+            WHERE qa.cmid = ?";
     $params = [
         $cmid,
         $cmid,
@@ -1290,6 +1314,18 @@ function icontent_get_attempts_users($cmid, $sort, $page = 0, $perpage = ICONTEN
         ICONTENT_QTYPE_ESSAY_STATUS_TOEVALUATE,
         $cmid,
     ]; // Field CMID used four times. Check (?).
+    if (!empty($groupid)) {
+        $sql .= "
+              AND EXISTS (
+                   SELECT 1
+                     FROM {groups_members} gm
+                    WHERE gm.userid = u.id
+                      AND gm.groupid = ?
+              )";
+        $params[] = $groupid;
+    }
+    $sql .= "
+         ORDER BY $sortparams";
     return $DB->get_records_sql($sql, $params, $page * $perpage, $perpage);
 }
 
@@ -1303,9 +1339,11 @@ function icontent_get_attempts_users($cmid, $sort, $page = 0, $perpage = ICONTEN
  * @param string $status
  * @param int $page
  * @param int $perpage
+ * @param int $groupid
  * @return object $attemptusers, otherwhise false.
  */
-function icontent_get_attempts_users_with_open_answers($cmid, $sort, $status = null, $page = 0, $perpage = ICONTENT_PER_PAGE) {
+function icontent_get_attempts_users_with_open_answers($cmid, $sort, $status = null, $page = 0, $perpage = ICONTENT_PER_PAGE,
+    $groupid = 0) {
     global $CFG, $DB;
     $sortparams = 'u.firstname '.$sort;
     $page = (int) $page;
@@ -1372,14 +1410,25 @@ function icontent_get_attempts_users_with_open_answers($cmid, $sort, $status = n
                                                              AND qpo.responseformat = 'picture'
                                                 )
                                         )
-                            )
-         ORDER BY {$sortparams}";
+                            )";
     $params = [
         $cmid,
         $status,
         $cmid,
         $status,
     ]; // Field CMID used two times. Check (?).
+    if (!empty($groupid)) {
+        $sql .= "
+              AND EXISTS (
+                   SELECT 1
+                     FROM {groups_members} gm
+                    WHERE gm.userid = u.id
+                      AND gm.groupid = ?
+              )";
+        $params[] = $groupid;
+    }
+    $sql .= "
+         ORDER BY {$sortparams}";
     return $DB->get_records_sql($sql, $params, $page * $perpage, $perpage);
 }
 
@@ -3130,7 +3179,6 @@ function icontent_make_notesarea($objpage, $icontent) {
     );
 
     // Create text area for tags.
-    /*
     $textareatag = html_writer::tag('textarea', null,
         [
             'name' => 'comment',
@@ -3141,7 +3189,7 @@ function icontent_make_notesarea($objpage, $icontent) {
             'placeholder' => get_string('writetag', 'mod_icontent'),
         ]
     );
-    */
+
     // Create check box for, Ask tutor only. NOT NEEDED.
     // $spandoubttutor = icontent_make_span_checkbox_field_doubttutor($objpage); NOT NEEDED.
     // Create the question save button.
@@ -3716,6 +3764,91 @@ function icontent_get_page_primary_questioncategoryid($pageid, $cmid) {
 }
 
 /**
+ * Save tags for one iContent page.
+ *
+ * @param int $pageid
+ * @param int $cmid
+ * @param context_module $context
+ * @param string $tagtext
+ * @return void
+ */
+function icontent_save_page_tags($pageid, $cmid, context_module $context, $tagtext) {
+    global $DB;
+
+    $DB->get_record('icontent_pages', ['id' => $pageid, 'cmid' => $cmid], 'id', MUST_EXIST);
+
+    $tags = preg_split('/[\r\n,]+/', (string)$tagtext);
+    $tags = array_map('trim', $tags);
+    $tags = array_values(array_filter($tags, static function($tag) {
+        return $tag !== '';
+    }));
+
+    \core_tag_tag::set_item_tags('mod_icontent', 'icontent_pages', $pageid, $context, $tags);
+}
+
+/**
+ * Build the page tags area (list + optional edit form).
+ *
+ * @param stdClass $objpage
+ * @return string
+ */
+function icontent_make_page_tags_area($objpage) {
+    global $OUTPUT;
+
+    $context = context_module::instance($objpage->cmid);
+    $canedittags = has_capability('mod/icontent:edit', $context);
+    $tags = \core_tag_tag::get_item_tags('mod_icontent', 'icontent_pages', $objpage->id);
+
+    $title = html_writer::tag('h5', get_string('tags'), ['class' => 'text-uppercase']);
+    $taglist = $OUTPUT->tag_list($tags, null, 'icontent-tags');
+    if (!$tags) {
+        $taglist = html_writer::div(get_string('notagsyet', 'mod_icontent'), 'alert alert-info');
+    }
+
+    $content = html_writer::div($taglist, 'icontent-page-tags-list', ['id' => 'idpagetagslist']);
+
+    if ($canedittags) {
+        $existingtags = [];
+        foreach ($tags as $tag) {
+            if (!empty($tag->rawname)) {
+                $existingtags[] = $tag->rawname;
+            } else if (!empty($tag->name)) {
+                $existingtags[] = $tag->name;
+            }
+        }
+
+        $textarea = html_writer::tag('textarea', s(implode(', ', $existingtags)), [
+            'name' => 'pagetags',
+            'id' => 'idcommenttag',
+            'class' => 'col-12',
+            'maxlength' => '1024',
+            'placeholder' => get_string('writetag', 'mod_icontent'),
+        ]);
+
+        $savebtn = html_writer::tag('button', get_string('save', 'mod_icontent'), [
+            'type' => 'submit',
+            'class' => 'btn btn-primary pull-right mt-2',
+            'id' => 'idbtnsavetag',
+        ]);
+
+        $hidden = html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'id', 'value' => $objpage->cmid]);
+        $hidden .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'pageid', 'value' => $objpage->id]);
+        $hidden .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'savetags', 'value' => 1]);
+        $hidden .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
+
+        $form = html_writer::tag('form', $hidden . $textarea . $savebtn, [
+            'method' => 'post',
+            'action' => new moodle_url('/mod/icontent/view.php'),
+            'class' => 'icontent-page-tags-form mt-2',
+        ]);
+
+        $content .= $form;
+    }
+
+    return html_writer::div($title . $content, 'icontent-page-tags mt-3', ['id' => 'idpagetagsarea']);
+}
+
+/**
  * This is the function responsible for creating the content for cover page.
  *
  * Returns a string with the cover page.
@@ -3762,7 +3895,8 @@ function icontent_make_cover_page($icontent, $objpage, $context) {
     $title = html_writer::tag('h1', $objpage->title, ['class' => 'titlecoverpage']);
     $header = $objpage->showtitle ? html_writer::div($title, 'headercoverpage row ') : false;
     $content = html_writer::div($chars, "contentcoverpage ". $displaynone);
-    $coverpage = html_writer::tag('div', $toolbarpage. $header. $content. $script,
+    $tagsarea = icontent_make_page_tags_area($objpage);
+    $coverpage = html_writer::tag('div', $toolbarpage. $header. $content. $tagsarea. $script,
         [
             'class' => 'fulltextpage coverpage',
             'data-pageid' => $objpage->id,
@@ -3787,7 +3921,7 @@ function icontent_make_cover_page($icontent, $objpage, $context) {
  * @return object $fullpage
  */
 function icontent_get_fullpageicontent($pagenum, $icontent, $context) {
-    global $DB, $CFG, $OUTPUT;
+    global $DB, $CFG;
     //use core_tag_tag;
 
     // Get page.
@@ -3846,16 +3980,7 @@ function icontent_get_fullpageicontent($pagenum, $icontent, $context) {
     $qtsareas = icontent_make_questionsarea($objpage, $icontent);
     // Form notes.
     $notesarea = icontent_make_notesarea($objpage, $icontent);
-    // 20240920 If tags exist add them to each entry.
-    $tarea = $OUTPUT->tag_list(
-        core_tag_tag::get_item_tags(
-            'mod_icontent',
-            'icontent_pages',
-            $objpage->id,
-        ),
-        null,
-        'icontent-tags'
-    );
+    $tarea = icontent_make_page_tags_area($objpage);
 
     // Control button.
     $objpage->previous = icontent_get_prev_pagenum($objpage);

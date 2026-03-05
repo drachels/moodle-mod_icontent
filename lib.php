@@ -254,93 +254,106 @@ function icontent_user_complete($course, $user, $mod, $icontent) {
  * @return boolean True if anything was printed, otherwise false
  */
 function icontent_print_recent_activity($course, $viewfullnames, $timestart) {
-    global $CFG, $USER, $DB, $OUTPUT;
+    global $OUTPUT;
 
-    if (! get_config('icontent', 'showrecentactivity')) {
+    if (!get_config('mod_icontent', 'showrecentactivity')) {
         return false;
     }
 
-    $dbparams = [
-        $timestart,
-        $course->id,
-        'icontent',
+    $activities = [];
+    $index = 0;
+    $instances = get_all_instances_in_course('icontent', $course);
+
+    if (empty($instances)) {
+        return false;
+    }
+
+    foreach ($instances as $instance) {
+        if (empty($instance->coursemodule)) {
+            continue;
+        }
+        icontent_get_recent_mod_activity($activities, $index, $timestart, $course->id, (int)$instance->coursemodule);
+    }
+
+    if (empty($activities)) {
+        return false;
+    }
+
+    usort($activities, static function($a, $b) {
+        return $b->timestamp <=> $a->timestamp;
+    });
+
+    echo $OUTPUT->heading(get_string('recentactivityheader', 'icontent') . ':', 6);
+    foreach ($activities as $activity) {
+        icontent_print_recent_mod_activity($activity, $course->id, true, [], $viewfullnames);
+    }
+
+    return true;
+}
+
+/**
+ * Build a display label for an iContent page in recent activity text.
+ *
+ * @param stdClass $record Row with pagenum/title fields.
+ * @return string
+ */
+function icontent_recent_activity_page_label(stdClass $record): string {
+    $pagenum = isset($record->pagenum) ? (int)$record->pagenum : 0;
+    $title = isset($record->title) ? trim(strip_tags((string)$record->title)) : '';
+
+    if ($title !== '') {
+        return get_string('pagexwithtitle', 'icontent', (object)[
+            'pagenum' => $pagenum,
+            'title' => $title,
+        ]);
+    }
+
+    return get_string('pagex', 'icontent', $pagenum);
+}
+
+/**
+ * Add one prepared activity object to the shared recent-activity list.
+ *
+ * @param array $activities list of activities
+ * @param int $index index pointer
+ * @param stdClass $cm course-module object
+ * @param stdClass $record source row with userid/time/page fields
+ * @param string $message activity text
+ */
+function icontent_recent_activity_add_item(array &$activities, int &$index, $cm, stdClass $record, string $message): void {
+    $timestamp = (int)($record->activitytime ?? 0);
+    if (empty($timestamp)) {
+        return;
+    }
+
+    $pageid = !empty($record->pageid) ? (int)$record->pageid : 0;
+    $url = new moodle_url('/mod/icontent/view.php', ['id' => $cm->id]);
+    if ($pageid > 0) {
+        $url = new moodle_url('/mod/icontent/view.php', ['id' => $cm->id, 'pageid' => $pageid]);
+    }
+
+    $activity = (object) [
+        'type' => 'icontent',
+        'cmid' => $cm->id,
+        'sectionnum' => $cm->sectionnum,
+        'timestamp' => $timestamp,
+        'user' => (object) [
+            'id' => (int)$record->userid,
+            'firstname' => $record->firstname ?? '',
+            'lastname' => $record->lastname ?? '',
+            'firstnamephonetic' => $record->firstnamephonetic ?? '',
+            'lastnamephonetic' => $record->lastnamephonetic ?? '',
+            'middlename' => $record->middlename ?? '',
+            'alternatename' => $record->alternatename ?? '',
+            'imagealt' => $record->imagealt ?? '',
+        ],
+        'content' => (object) [
+            'text' => $message,
+            'url' => $url,
+        ],
     ];
 
-    $userfieldsapi = \core_user\fields::for_userpic();
-    $namefields = $userfieldsapi->get_sql('u', false, '', 'userid', false)->selects;;
-    // Need to adapt the following to apply to icontent notes and questions submitted.
-    /*
-    if (!$submissions = $DB->get_records_sql("SELECT asb.id, asb.timemodified, cm.id AS cmid, um.id as recordid,
-                                                     $namefields
-                                                FROM {assign_submission} asb
-                                                     JOIN {assign} a      ON a.id = asb.assignment
-                                                     JOIN {course_modules} cm ON cm.instance = a.id
-                                                     JOIN {modules} md        ON md.id = cm.module
-                                                     JOIN {user} u            ON u.id = asb.userid
-                                                LEFT JOIN {assign_user_mapping} um ON um.userid = u.id AND um.assignment = a.id
-                                               WHERE asb.timemodified > ? AND
-                                                     asb.latest = 1 AND
-                                                     a.course = ? AND
-                                                     md.name = ? AND
-                                                     asb.status = ?
-                                            ORDER BY asb.timemodified ASC", $dbparams)) {
-         return false;
-    }
-    */
-    return false;
-    // return true;
-
-    // Might actually be easier to adapt the code for wiki.
-    // Will need sql for notes/questions added to this.
-    // Will probably need sql for notes_like also.
-    // Will possibly need sql for question_attempts shown to teachers if it is an essay question attempt by a student.
-    /*
-    function wiki_print_recent_activity($course, $viewfullnames, $timestart) {
-        global $CFG, $DB, $OUTPUT;
-
-        $sql = "SELECT p.id, p.timemodified, p.subwikiid, sw.wikiid, w.wikimode, sw.userid, sw.groupid
-                FROM {wiki_pages} p
-                    JOIN {wiki_subwikis} sw ON sw.id = p.subwikiid
-                    JOIN {wiki} w ON w.id = sw.wikiid
-                WHERE p.timemodified > ? AND w.course = ?
-                ORDER BY p.timemodified ASC";
-        if (!$pages = $DB->get_records_sql($sql, array($timestart, $course->id))) {
-            return false;
-        }
-        require_once($CFG->dirroot . "/mod/wiki/locallib.php");
-
-        $wikis = array();
-
-        $modinfo = get_fast_modinfo($course);
-
-        $subwikivisible = array();
-        foreach ($pages as $page) {
-            if (!isset($subwikivisible[$page->subwikiid])) {
-                $subwiki = (object)array('id' => $page->subwikiid, 'wikiid' => $page->wikiid,
-                    'groupid' => $page->groupid, 'userid' => $page->userid);
-                $wiki = (object)array('id' => $page->wikiid, 'course' => $course->id, 'wikimode' => $page->wikimode);
-                $subwikivisible[$page->subwikiid] = wiki_user_can_view($subwiki, $wiki);
-            }
-            if ($subwikivisible[$page->subwikiid]) {
-                $wikis[] = $page;
-            }
-        }
-        unset($subwikivisible);
-        unset($pages);
-
-        if (!$wikis) {
-            return false;
-        }
-        echo $OUTPUT->heading(get_string("updatedwikipages", 'wiki') . ':', 6);
-        foreach ($wikis as $wiki) {
-            $cm = $modinfo->instances['wiki'][$wiki->wikiid];
-            $link = $CFG->wwwroot . '/mod/wiki/view.php?pageid=' . $wiki->id;
-            print_recent_activity_note($wiki->timemodified, $wiki, $cm->name, $link, false, $viewfullnames);
-        }
-
-        return true; //  True if anything was printed, otherwise false
-    }
-    */
+    $activities[$index++] = $activity;
 }
 
 /**
@@ -361,6 +374,123 @@ function icontent_print_recent_activity($course, $viewfullnames, $timestart) {
  * @param int $groupid check for a particular group's activity only, defaults to 0 (all groups)
  */
 function icontent_get_recent_mod_activity(&$activities, &$index, $timestart, $courseid, $cmid, $userid=0, $groupid=0) {
+    global $DB;
+
+    if (!get_config('mod_icontent', 'showrecentactivity')) {
+        return;
+    }
+
+    $modinfo = get_fast_modinfo($courseid);
+    if (empty($modinfo->cms[$cmid])) {
+        return;
+    }
+    $cm = $modinfo->cms[$cmid];
+    if (empty($cm->uservisible)) {
+        return;
+    }
+
+    $context = context_module::instance($cmid);
+    if (!has_capability('mod/icontent:view', $context)) {
+        return;
+    }
+
+    $userfieldsapi = \core_user\fields::for_userpic();
+    $userfields = $userfieldsapi->get_sql('u', false, '', 'userid', false)->selects;
+
+    $groupjoin = '';
+    $groupparams = [];
+    if (!empty($groupid)) {
+        $groupjoin = ' JOIN {groups_members} gm ON gm.userid = u.id AND gm.groupid = :groupid ';
+        $groupparams['groupid'] = (int)$groupid;
+    }
+
+    $userwhere = '';
+    $userparams = [];
+    if (!empty($userid)) {
+        $userwhere = ' AND u.id = :userid ';
+        $userparams['userid'] = (int)$userid;
+    }
+
+    $baseparams = [
+        'cmid' => (int)$cmid,
+        'timestart' => (int)$timestart,
+    ] + $groupparams + $userparams;
+
+    $notesql = "SELECT n.id,
+                       n.userid,
+                       n.pageid,
+                       n.parent,
+                       n.tab,
+                       n.timemodified AS activitytime,
+                       p.pagenum,
+                       p.title,
+                       {$userfields}
+                  FROM {icontent_pages_notes} n
+                  JOIN {icontent_pages} p ON p.id = n.pageid
+                  JOIN {user} u ON u.id = n.userid
+                  {$groupjoin}
+                 WHERE n.cmid = :cmid
+                   AND n.timemodified > :timestart
+                       {$userwhere}
+              ORDER BY n.timemodified ASC";
+    $notes = $DB->get_records_sql($notesql, $baseparams);
+
+    foreach ($notes as $note) {
+        $pagelabel = icontent_recent_activity_page_label($note);
+        if (!empty($note->parent)) {
+            $text = get_string('recentactivityrepliednote', 'icontent', $pagelabel);
+        } else if ($note->tab === 'doubts') {
+            $text = get_string('recentactivityaddedquestion', 'icontent', $pagelabel);
+        } else {
+            $text = get_string('recentactivityaddednote', 'icontent', $pagelabel);
+        }
+        icontent_recent_activity_add_item($activities, $index, $cm, $note, $text);
+    }
+
+    $attemptsql = "SELECT qa.id,
+                          qa.userid,
+                          pq.pageid,
+                          qa.timecreated AS activitytime,
+                          p.pagenum,
+                          p.title,
+                          {$userfields}
+                     FROM {icontent_question_attempts} qa
+                     JOIN {icontent_pages_questions} pq ON pq.id = qa.pagesquestionsid
+                     JOIN {icontent_pages} p ON p.id = pq.pageid
+                     JOIN {user} u ON u.id = qa.userid
+                     {$groupjoin}
+                    WHERE qa.cmid = :cmid
+                      AND qa.timecreated > :timestart
+                          {$userwhere}
+                 ORDER BY qa.timecreated ASC";
+    $attempts = $DB->get_records_sql($attemptsql, $baseparams);
+    foreach ($attempts as $attempt) {
+        $pagelabel = icontent_recent_activity_page_label($attempt);
+        $text = get_string('recentactivityattemptedquestion', 'icontent', $pagelabel);
+        icontent_recent_activity_add_item($activities, $index, $cm, $attempt, $text);
+    }
+
+    $viewedsql = "SELECT d.id,
+                         d.userid,
+                         d.pageid,
+                         d.timecreated AS activitytime,
+                         p.pagenum,
+                         p.title,
+                         {$userfields}
+                    FROM {icontent_pages_displayed} d
+                    JOIN {icontent_pages} p ON p.id = d.pageid
+                    JOIN {user} u ON u.id = d.userid
+                    {$groupjoin}
+                   WHERE d.cmid = :cmid
+                     AND d.timecreated > :timestart
+                         {$userwhere}
+                ORDER BY d.timecreated ASC";
+    $views = $DB->get_records_sql($viewedsql, $baseparams);
+    foreach ($views as $view) {
+        $pagelabel = icontent_recent_activity_page_label($view);
+        $text = get_string('recentactivityviewedpage', 'icontent', $pagelabel);
+        icontent_recent_activity_add_item($activities, $index, $cm, $view, $text);
+    }
 }
 
 /**
@@ -375,6 +505,26 @@ function icontent_get_recent_mod_activity(&$activities, &$index, $timestart, $co
  * @param bool $viewfullnames display users' full names
  */
 function icontent_print_recent_mod_activity($activity, $courseid, $detail, $modnames, $viewfullnames) {
+    $content = $activity->content ?? null;
+    if (empty($content) || empty($content->text)) {
+        return;
+    }
+
+    $text = $content->text;
+    if (!empty($content->url)) {
+        $text = html_writer::link($content->url, $text);
+    }
+
+    $fullname = fullname($activity->user, $viewfullnames);
+    $userurl = new moodle_url('/user/view.php', ['id' => $activity->user->id, 'course' => $courseid]);
+    $output = html_writer::start_div('icontent-recent-activity');
+    $output .= html_writer::div($text, 'activity');
+    $userline = get_string('createdby', 'icontent') . ' ' . html_writer::link($userurl, $fullname)
+        . ' on ' . userdate($activity->timestamp);
+    $output .= html_writer::div($userline, 'user');
+    $output .= html_writer::end_div();
+
+    echo $output;
 }
 
 /**

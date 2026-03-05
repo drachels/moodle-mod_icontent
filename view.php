@@ -34,6 +34,7 @@ $n  = optional_param('n', 0, PARAM_INT); // Icontent instance ID.
 $edit = optional_param('edit', -1, PARAM_BOOL); // Edit mode.
 $pageid = optional_param('pageid', null, PARAM_INT); // Chapter ID.
 $removeqpid = optional_param('removeqpid', 0, PARAM_INT);
+$savetags = optional_param('savetags', 0, PARAM_BOOL);
 
 if ($pageid !== null && $pageid <= 0) {
     throw new invalid_parameter_exception('Invalid pageid value');
@@ -140,6 +141,24 @@ if ($removeqpid > 0) {
     redirect(
         new moodle_url('/mod/icontent/view.php', ['id' => $cm->id, 'pageid' => $pageid]),
         get_string('msgsucessexclusion', 'mod_icontent')
+    );
+}
+
+if ($savetags) {
+    require_sesskey();
+
+    if ($pageid === null) {
+        throw new moodle_exception(get_string('incorrectpage', 'icontent'));
+    }
+
+    require_capability('mod/icontent:edit', $context);
+
+    $pagetags = optional_param('pagetags', '', PARAM_RAW_TRIMMED);
+    icontent_save_page_tags((int)$pageid, (int)$cm->id, $context, $pagetags);
+
+    redirect(
+        new moodle_url('/mod/icontent/view.php', ['id' => $cm->id, 'pageid' => $pageid]),
+        get_string('msgsucess', 'mod_icontent')
     );
 }
 

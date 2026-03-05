@@ -199,6 +199,20 @@
 .path-mod-icontent .notesarea #note .fields span{
 	margin-right: 15px;
 }
+.path-mod-icontent .notesarea #idcommentnote,
+.path-mod-icontent .notesarea #idcommentdoubt {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.path-mod-icontent .notesarea .notecomment .replynotecomment,
+.path-mod-icontent .notesarea .notecomment .textnotecomment {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
 .path-mod-icontent .notesarea #tabnav #messagenotes{
  	background: #6DB143 none repeat scroll 0 0;
     border-radius: 10px;

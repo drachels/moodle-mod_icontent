@@ -27,7 +27,8 @@ require_once(dirname(__FILE__).'/locallib.php');
 
 $id = required_param('id', PARAM_INT); // Course Module ID.
 $pageid = optional_param('pageid', 0, PARAM_INT); // Page note ID.
-$action = optional_param('action', 0, PARAM_ALPHA); // Action.
+$action = optional_param('action', 'overview', PARAM_ALPHA); // Action.
+$group = optional_param('group', 0, PARAM_INT); // Group filter.
 $sort = optional_param('sort', '', PARAM_ALPHA);
 $page = optional_param('page', 0, PARAM_INT);
 $perpage = optional_param('perpage', ICONTENT_PER_PAGE, PARAM_INT);
@@ -41,7 +42,7 @@ require_login($course, false, $cm);
 $context = context_module::instance($cm->id);
 require_capability('mod/icontent:grade', $context);
 // Page setting.
-$PAGE->set_url('/mod/icontent/grade.php', ['id' => $cm->id, 'action' => $action]);
+$PAGE->set_url('/mod/icontent/grade.php', ['id' => $cm->id, 'action' => $action, 'group' => $group]);
 // Header and strings.
 $PAGE->set_title($icontent->name);
 $PAGE->set_heading($course->fullname);
@@ -49,12 +50,31 @@ $PAGE->set_heading($course->fullname);
 echo $OUTPUT->header();
 echo $OUTPUT->heading($icontent->name);
 echo $OUTPUT->heading(get_string('summaryattempts', 'mod_icontent'), 3);
-$url = new moodle_url('/mod/icontent/grade.php', ['id' => $id, 'action' => $action, 'page' => $page, 'perpage' => $perpage]);
+$gradesurl = new moodle_url('/mod/icontent/grade.php', ['id' => $id, 'action' => 'overview', 'group' => $group]);
+$manualreviewurl = new moodle_url('/mod/icontent/grading.php', ['id' => $id, 'action' => 'grading', 'group' => $group]);
+$modetoggle = html_writer::div(
+    html_writer::link($gradesurl, get_string('grades'), ['class' => 'btn btn-primary mr-2']).
+    html_writer::link($manualreviewurl, get_string('manualreview', 'mod_icontent'), ['class' => 'btn btn-secondary']),
+    'mb-3 icontent-results-mode-toggle'
+);
+echo $modetoggle;
+$currentgroup = 0;
+if (groups_get_activity_groupmode($cm) != NOGROUPS) {
+    $currentgroup = groups_get_activity_group($cm, true);
+    if ($currentgroup) {
+        $group = $currentgroup;
+    }
+    $groupmenuurl = new moodle_url('/mod/icontent/grade.php', ['id' => $id, 'action' => $action]);
+    echo groups_print_activity_menu($cm, $groupmenuurl, true);
+}
+
+$url = new moodle_url('/mod/icontent/grade.php', ['id' => $id, 'action' => $action, 'group' => $group,
+    'page' => $page, 'perpage' => $perpage]);
 // Get sort value.
 $sort = icontent_check_value_sort($sort);
 // Get users attempts.
-$attemptsusers = icontent_get_attempts_users($cm->id, $sort, $page, $perpage);
-$tattemtpsusers = icontent_count_attempts_users($cm->id);
+$attemptsusers = icontent_get_attempts_users($cm->id, $sort, $page, $perpage, $group);
+$tattemtpsusers = icontent_count_attempts_users($cm->id, $group);
 $tquestinstance = icontent_get_totalquestions_by_instance($cm->id);
 // Make table questions.
 $table = new html_table();
