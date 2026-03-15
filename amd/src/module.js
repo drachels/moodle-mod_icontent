@@ -19,7 +19,12 @@
  * @author     Johannes Burk & Vincent Schneider 2017
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-define(['jquery','jqueryui', 'mod_icontent/cookiehandler'], function($, jqui, c) {
+define(['jquery', 'jqueryui', 'mod_icontent/cookiehandler'], function($, jqui, c) {
+    /**
+     *
+     * @param {number|string} cmid
+     * @param {number|string} pageid
+     */
     function getDeepLink(cmid, pageid) {
         if (!cmid || !pageid) {
             return '#';
@@ -32,6 +37,11 @@ define(['jquery','jqueryui', 'mod_icontent/cookiehandler'], function($, jqui, c)
         return url.toString();
     }
 
+    /**
+     *
+     * @param {jQuery} $btn
+     * @param {boolean} disabled
+     */
     function onSetControlDisabled($btn, disabled) {
         if (disabled) {
             $btn.prop('disabled', true)
@@ -47,6 +57,11 @@ define(['jquery','jqueryui', 'mod_icontent/cookiehandler'], function($, jqui, c)
             .removeAttr('tabindex');
     }
 
+    /**
+     *
+     * @param {number|string} cmid
+     * @param {boolean} replace
+     */
     function onUpdateDeepLink(cmid, replace) {
         var pageid = $('.fulltextpage').attr('data-pageid');
         if (!cmid || !pageid || !window.history || !window.history.replaceState) {
@@ -63,7 +78,11 @@ define(['jquery','jqueryui', 'mod_icontent/cookiehandler'], function($, jqui, c)
     }
 
     // Loads page
-    function onLoadPageClick(e){
+    /**
+     *
+     * @param {Event} e
+     */
+    function onLoadPageClick(e) {
         if (e && e.preventDefault) {
             e.preventDefault();
         }
@@ -75,7 +94,7 @@ define(['jquery','jqueryui', 'mod_icontent/cookiehandler'], function($, jqui, c)
             "sesskey": $(this).attr('data-sesskey')
         };
         // Destroy all tooltips
-        //$('[data-toggle="tooltip"]').tooltip('destroy');
+        // $('[data-toggle="tooltip"]').tooltip('destroy');
         // Loading page
         $(".icontent-page")
             .children('.fulltextpage')
@@ -94,11 +113,11 @@ define(['jquery','jqueryui', 'mod_icontent/cookiehandler'], function($, jqui, c)
             url: "ajax.php", // Relative or absolute path to ajax.php file
             data: postdata,
             success: function(data) {
-                if(data.transitioneffect !== "0"){
+                if (data.transitioneffect !== "0") {
                     $(".icontent-page").hide();
                     $(".icontent-page").html(data.fullpageicontent);
                     $(".icontent-page").show(data.transitioneffect, 1000);
-                }else{
+                } else {
                     $(".icontent-page").html(data.fullpageicontent);
                 }
                 onChecksHighcontrast();
@@ -110,52 +129,62 @@ define(['jquery','jqueryui', 'mod_icontent/cookiehandler'], function($, jqui, c)
     } // End onLoad..
 
     // Checks if the cookie is set.
-    function onChecksHighcontrast(){
+    /**
+     *
+     */
+    function onChecksHighcontrast() {
         if (c.cookie('highcontrast') == "yes") {
-            $(".fulltextpage").addClass("highcontrast").css({"background-color":"#000000", "background-image": "none"});
+            $(".fulltextpage").addClass("highcontrast").css({"background-color": "#000000", "background-image": "none"});
         }
     }
     // Change state the control buttons
-    function onChangeStateControlButtons($data){
+    /**
+     *
+     * @param {Object} $data
+     */
+    function onChangeStateControlButtons($data) {
         var $btnprev = $('.icontent-buttonbar .btn-previous-page');
         var $btnnext = $('.icontent-buttonbar .btn-next-page');
         var cmid = $btnprev.attr('data-cmid') || $btnnext.attr('data-cmid') || $('.load-page[data-cmid]:first').attr('data-cmid');
 
-        if($data.previous){
+        if ($data.previous) {
             onSetControlDisabled($btnprev, false);
-            $btnprev.attr( "data-pagenum", $data.previous );
+            $btnprev.attr("data-pagenum", $data.previous);
             if ($data.previouspageid) {
                 $btnprev.attr('data-pageid', $data.previouspageid);
                 $btnprev.attr('href', getDeepLink(cmid, $data.previouspageid));
             }
-        }else{
+        } else {
             onSetControlDisabled($btnprev, true);
             $btnprev.removeAttr('data-pageid');
             $btnprev.attr('href', '#');
         }
 
-        if($data.next){
+        if ($data.next) {
             onSetControlDisabled($btnnext, false);
-            $btnnext.attr( "data-pagenum", $data.next );
+            $btnnext.attr("data-pagenum", $data.next);
             if ($data.nextpageid) {
                 $btnnext.attr('data-pageid', $data.nextpageid);
                 $btnnext.attr('href', getDeepLink(cmid, $data.nextpageid));
             }
-        }else{
+        } else {
             onSetControlDisabled($btnnext, true);
             $btnnext.removeAttr('data-pageid');
             $btnnext.attr('href', '#');
         }
     }
     // Disable button when clicked.
-    function onBtnActiveEnableDisableClick(pagenum){
-        var pagenum = pagenum;
+    /**
+     *
+     * @param {number|string} pagenum
+     */
+    function onBtnActiveEnableDisableClick(pagenum) {
         $(".load-page").removeClass("active");
         $(".btn-icontent-page").removeClass('disabled').removeAttr('aria-disabled').removeAttr('tabindex');
         $(".btn-icontent-page").removeAttr("disabled");
-        $(".page"+ pagenum).addClass("active");
-        $(".page"+ pagenum).addClass('disabled').attr('aria-disabled', 'true').attr('tabindex', '-1');
-        $(".page"+ pagenum).prop("disabled", true );
+        $(".page" + pagenum).addClass("active");
+        $(".page" + pagenum).addClass('disabled').attr('aria-disabled', 'true').attr('tabindex', '-1');
+        $(".page" + pagenum).prop("disabled", true);
     }
     return {
         init: function() {

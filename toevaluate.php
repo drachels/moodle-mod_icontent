@@ -22,8 +22,8 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-require(dirname(__FILE__).'/../../config.php');
-require_once(dirname(__FILE__).'/locallib.php');
+require(dirname(__FILE__) . '/../../config.php');
+require_once(dirname(__FILE__) . '/locallib.php');
 
 $id = required_param('id', PARAM_INT); // Course Module ID.
 $userid = required_param('userid', PARAM_INT); // Page note ID.
@@ -57,7 +57,7 @@ if ($action) {
     $update = false;
     if ($questions) {
         foreach ($questions as $qname => $qvalue) {
-            list($strname, $answerid) = explode('-', $qname);
+            [$strname, $answerid] = explode('-', $qname);
             $qvalue = $qvalue > 1 ? 1 : $qvalue;
             $commentkey = 'attemptid-' . $answerid;
             $attempt = new stdClass();
@@ -68,7 +68,7 @@ if ($action) {
             $attempt->reviewercommentformat = $questioncommentformats[$commentkey] ?? FORMAT_HTML;
             // Save values.
             $update = icontent_update_question_attempts($attempt);
-            $i ++;
+            $i++;
         }
     }
     if ($update) {
@@ -76,11 +76,14 @@ if ($action) {
         icontent_set_grade_item($icontent, $cm->id, $user->id);
         // Log event.
         \mod_icontent\event\question_toevaluate_created::create_from_question_toevaluate($icontent, $context, $user)->trigger();
-        redirect(new moodle_url('/mod/icontent/grading.php',
-            [
+        redirect(
+            new moodle_url(
+                '/mod/icontent/grading.php',
+                [
                 'id' => $cm->id,
                 'action' => 'grading',
-            ]),
+                ]
+            ),
             get_string('msgsucessevaluate', 'mod_icontent', $i)
         );
     }
@@ -95,11 +98,13 @@ $preferrededitor = editors_get_preferred_editor($preferredformat);
 echo html_writer::start_tag('form', ['method' => 'post']);
 if ($qopenanswers) {
     foreach ($qopenanswers as $qopenanswer) {
-        $fieldname = 'question[attemptid-'.$qopenanswer->id.']';
-        $fieldid = 'idquestion-'.$qopenanswer->questionid.'_pqid-'.$qopenanswer->pagesquestionsid.'_'.ICONTENT_QTYPE_ESSAY;
-        $commentfieldname = 'questioncomment[attemptid-'.$qopenanswer->id.']';
-        $commentformatname = 'questioncommentformat[attemptid-'.$qopenanswer->id.']';
-        $commentfieldid = 'idcomment-'.$qopenanswer->id;
+        $fieldname = 'question[attemptid-' . $qopenanswer->id . ']';
+        $fieldid =
+            'idquestion-' . $qopenanswer->questionid . '_pqid-' .
+            $qopenanswer->pagesquestionsid . '_' . ICONTENT_QTYPE_ESSAY;
+        $commentfieldname = 'questioncomment[attemptid-' . $qopenanswer->id . ']';
+        $commentformatname = 'questioncommentformat[attemptid-' . $qopenanswer->id . ']';
+        $commentfieldid = 'idcomment-' . $qopenanswer->id;
         $fraction = ($status === ICONTENT_QTYPE_ESSAY_STATUS_VALUED) ? $qopenanswer->fraction : ''; // Check status.
         $reviewercomment = (string)($qopenanswer->reviewercomment ?? '');
         $reviewercommentformat = (int)($qopenanswer->reviewercommentformat ?? $preferredformat);
@@ -109,7 +114,12 @@ if ($qopenanswers) {
         $qtext = html_writer::div($qopenanswer->questiontext, 'qtext');
         $qanswercontent = icontent_render_manual_review_answer($qopenanswer, (int)$cm->id);
         $qanswer = html_writer::div($qanswercontent, 'answer qtype_essay_editor qtype_essay_response readonly');
-        $commentlabel = html_writer::label(get_string('comments', 'mod_icontent'), $commentfieldid, false, ['class' => 'labelfieldcomment']);
+        $commentlabel = html_writer::label(
+            get_string('comments', 'mod_icontent'),
+            $commentfieldid,
+            false,
+            ['class' => 'labelfieldcomment']
+        );
         $commentfield = html_writer::tag('textarea', s($reviewercomment), [
             'id' => $commentfieldid,
             'name' => $commentfieldname,
@@ -130,9 +140,14 @@ if ($qopenanswers) {
         $commentblock = html_writer::div($commentlabel . $commentfield . $commentformatfield, 'cblock mt-2');
         $ablock = html_writer::div($qanswer, 'ablock');
         $skipline = html_writer::empty_tag('br');
-        $labelgrade = html_writer::label(get_string('gradenoun', 'icontent').$skipline, $fieldid, null,
-            ['class' => 'labelfieldgrade']);
-        $fieldfraction = html_writer::empty_tag('input',
+        $labelgrade = html_writer::label(
+            get_string('gradenoun', 'icontent') . $skipline,
+            $fieldid,
+            null,
+            ['class' => 'labelfieldgrade']
+        );
+        $fieldfraction = html_writer::empty_tag(
+            'input',
             [
                 'type' => 'number',
                 'class' => 'input-mini',
@@ -146,20 +161,25 @@ if ($qopenanswers) {
             ]
         );
         $labelmaxgrade = html_writer::label(get_string('strmaxgrade', 'mod_icontent'), null);
-        $divgrade = html_writer::div($labelgrade. $fieldfraction. $labelmaxgrade, 'gblock');
-          $content = html_writer::div($qtext.$ablock.$commentblock.$divgrade, 'formulation');
-        echo html_writer::div($attempttitle.$content, 'que manualgraded '.ICONTENT_QTYPE_ESSAY,
+        $divgrade = html_writer::div($labelgrade . $fieldfraction . $labelmaxgrade, 'gblock');
+          $content = html_writer::div($qtext . $ablock . $commentblock . $divgrade, 'formulation');
+        echo html_writer::div(
+            $attempttitle . $content,
+            'que manualgraded ' . ICONTENT_QTYPE_ESSAY,
             [
-               'id' => 'idq'.$qopenanswer->questionid,
+               'id' => 'idq' . $qopenanswer->questionid,
             ]
         );
     }
 } else {
-    redirect(new moodle_url('/mod/icontent/grading.php',
-        [
+    redirect(
+        new moodle_url(
+            '/mod/icontent/grading.php',
+            [
             'id' => $cm->id,
             'action' => $action,
-        ]),
+            ]
+        ),
         get_string('norecordsfound', 'mod_icontent')
     );
 }

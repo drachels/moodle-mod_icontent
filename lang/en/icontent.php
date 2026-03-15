@@ -85,8 +85,8 @@ $string['columns4'] = 'Until four columns';
 $string['columns5'] = 'Until five columns';
 $string['comments'] = 'Comments';
 $string['confdeleteattempt'] = 'Remove attempt the page {$a->pagenum}';
-$string['confirmremovequestion'] = 'Are you sure you want to remove this question from the page?';
 $string['configpassword_desc'] = 'Whether a password is required in order to access the lesson.';
+$string['confirmremovequestion'] = 'Are you sure you want to remove this question from the page?';
 
 $string['confpagedelete'] = 'Do you want to delete this page along with all files and records related to it?';
 $string['confpagenotedelete'] = '<i class="fa fa-exclamation-triangle"></i> Are you sure you want to delete this note and all replies? <span class="label label-warning">{$a} reply(ies)</span>';
@@ -205,8 +205,8 @@ $string['next'] = 'Next ';
 $string['nextpage'] = 'Next page';
 $string['noeffect'] = 'No effect';
 $string['nonotes'] = 'No notes for this page.';
-$string['notagsyet'] = 'No tags have been added for this page yet.';
 $string['norecordsfound'] = '<i class="fa fa-info-circle"></i> No records found.';
+$string['notagsyet'] = 'No tags have been added for this page yet.';
 $string['note'] = 'Notes <span id="messagenotes">{$a}</span>';
 $string['notedon'] = ' noted on ';
 $string['notes'] = 'Notes';
@@ -219,75 +219,69 @@ $string['pagecount'] = '<span>Pages <em>{$a}</em></span>';
 $string['pagenotfound'] = '<i class="fa fa-exclamation-triangle" aria-hidden="true"></i> No page found for this instance of iContent.';
 $string['pages'] = '<span>Pages</span>';
 $string['pagetitle'] = 'Page title';
+$string['pagex'] = 'Page {$a}';
+$string['pagexwithtitle'] = 'Page {$a->pagenum}: {$a->title}';
 $string['partialresult'] = 'Partial result';
-$string['pendingreview'] = 'Pending';
-$string['reviewercomments'] = 'Teacher comments';
 $string['password'] = 'Password';
-
+$string['pendingreview'] = 'Pending';
 $string['pluginadministration'] = 'Content Pages Administration';
 $string['pluginname'] = 'Content Pages';
 $string['preview'] = 'Preview';
 $string['previous'] = ' Previous';
 $string['previouspage'] = 'Page previous';
-
-
-
-$string['privacy:metadata:icontent_pages_notes:pageid'] = 'Found by unit testing that this string was missing.';
-$string['privacy:metadata:icontent_pages_notes:featured'] = 'Featured note.';
-$string['privacy:metadata:icontent_pages_notes:doubttutor'] = 'Question for the teacher/tutor.';
-$string['privacy:metadata:icontent_pages_notes:parent'] = 'Found by unit testing that this string was missing.';
-$string['privacy:metadata:icontent_pages_notes:path'] = 'Found by unit testing that this string was missing.';
-$string['privacy:metadata:icontent_pages_notes:tab'] = 'Notes or Questions.';
-$string['privacy:metadata:icontent_pages_notes'] = 'User notes.';
-$string['privacy:metadata:icontent_pages_notes:private'] = 'Found by unit testing that this string was missing.';
-$string['privacy:metadata:icontent_pages_notes:cmid'] = 'Found by unit testing that this string was missing.';
-$string['privacy:metadata:icontent_pages_notes:timemodified'] = 'Time modified.';
-$string['privacy:metadata:icontent_pages_notes_like'] = 'User likes on notes/questions.';
-$string['privacy:metadata:icontent_pages_notes_like:pagenoteid'] = 'ID of note/question liked.';
-$string['privacy:metadata:icontent_pages_notes_like:userid'] = 'ID of the user who liked the note/question.';
-$string['privacy:metadata:icontent_pages_notes_like:cmid'] = 'ID of the iContent course module.';
-$string['privacy:metadata:icontent_pages_notes_like:timemodified'] = 'Time the like was created/updated.';
-$string['privacy:metadata:icontent_pages_displayed'] = 'Records of pages viewed by users.';
-$string['privacy:metadata:icontent_pages_displayed:pageid'] = 'ID of the viewed page.';
-$string['privacy:metadata:icontent_pages_displayed:userid'] = 'ID of the user who viewed the page.';
-$string['privacy:metadata:icontent_pages_displayed:cmid'] = 'ID of the iContent course module.';
-$string['privacy:metadata:icontent_pages_displayed:timecreated'] = 'Time the page was marked as viewed.';
-$string['privacy:metadata:icontent_question_attempts'] = 'User attempts on iContent embedded questions.';
-$string['privacy:metadata:icontent_question_attempts:pagesquestionsid'] = 'ID of the page question mapping.';
-$string['privacy:metadata:icontent_question_attempts:questionid'] = 'ID of the Moodle question attempted.';
-$string['privacy:metadata:icontent_question_attempts:userid'] = 'ID of the user who attempted the question.';
-$string['privacy:metadata:icontent_question_attempts:cmid'] = 'ID of the iContent course module.';
-$string['privacy:metadata:icontent_question_attempts:fraction'] = 'Fraction/score awarded for the attempt.';
-$string['privacy:metadata:icontent_question_attempts:rightanswer'] = 'Stored right answer data for reporting.';
-$string['privacy:metadata:icontent_question_attempts:answertext'] = 'Stored submitted answer text/value.';
-$string['privacy:metadata:icontent_question_attempts:timecreated'] = 'Time the question attempt was created.';
 $string['privacy:metadata:icontent_grades'] = 'User grades recorded by iContent.';
-$string['privacy:metadata:icontent_grades:icontentid'] = 'ID of the iContent activity instance.';
-$string['privacy:metadata:icontent_grades:userid'] = 'ID of the user grade owner.';
 $string['privacy:metadata:icontent_grades:cmid'] = 'ID of the iContent course module.';
 $string['privacy:metadata:icontent_grades:grade'] = 'Recorded grade value for the user.';
+$string['privacy:metadata:icontent_grades:icontentid'] = 'ID of the iContent activity instance.';
 $string['privacy:metadata:icontent_grades:timemodified'] = 'Time the grade was modified.';
+$string['privacy:metadata:icontent_grades:userid'] = 'ID of the user grade owner.';
+$string['privacy:metadata:icontent_pages_displayed'] = 'Records of pages viewed by users.';
+$string['privacy:metadata:icontent_pages_displayed:cmid'] = 'ID of the iContent course module.';
+$string['privacy:metadata:icontent_pages_displayed:pageid'] = 'ID of the viewed page.';
+$string['privacy:metadata:icontent_pages_displayed:timecreated'] = 'Time the page was marked as viewed.';
+$string['privacy:metadata:icontent_pages_displayed:userid'] = 'ID of the user who viewed the page.';
+$string['privacy:metadata:icontent_pages_notes'] = 'User notes.';
+$string['privacy:metadata:icontent_pages_notes:cmid'] = 'Found by unit testing that this string was missing.';
+$string['privacy:metadata:icontent_pages_notes:comment'] = 'Found by unit testing that this string was missing.';
+$string['privacy:metadata:icontent_pages_notes:doubttutor'] = 'Question for the teacher/tutor.';
+$string['privacy:metadata:icontent_pages_notes:featured'] = 'Featured note.';
+$string['privacy:metadata:icontent_pages_notes:pageid'] = 'Found by unit testing that this string was missing.';
+$string['privacy:metadata:icontent_pages_notes:parent'] = 'Found by unit testing that this string was missing.';
+$string['privacy:metadata:icontent_pages_notes:path'] = 'Found by unit testing that this string was missing.';
+$string['privacy:metadata:icontent_pages_notes:private'] = 'Found by unit testing that this string was missing.';
+$string['privacy:metadata:icontent_pages_notes:tab'] = 'Notes or Questions.';
 $string['privacy:metadata:icontent_pages_notes:timecreated'] = 'Time created.';
-$string['privacy:metadata:icontent_pages_notes:comment'] = 'Found by unit testing that this string was missing.';
+$string['privacy:metadata:icontent_pages_notes:timemodified'] = 'Time modified.';
 $string['privacy:metadata:icontent_pages_notes:userid'] = 'Found by unit testing that this string was missing.';
-$string['privacy:metadata:icontent_pages_notes:timemodified'] = 'Found by unit testing that this string was missing.';
-$string['privacy:metadata:icontent_pages_notes:timecreated'] = 'Found by unit testing that this string was missing.';
-$string['privacy:metadata:icontent_pages_notes:comment'] = 'Found by unit testing that this string was missing.';
-$string['privacy:metadata:icontent_pages_notes:userid'] = 'ID of the user for the note.';
-
-
-
-
-
+$string['privacy:metadata:icontent_pages_notes_like'] = 'User likes on notes/questions.';
+$string['privacy:metadata:icontent_pages_notes_like:cmid'] = 'ID of the iContent course module.';
+$string['privacy:metadata:icontent_pages_notes_like:pagenoteid'] = 'ID of note/question liked.';
+$string['privacy:metadata:icontent_pages_notes_like:timemodified'] = 'Time the like was created/updated.';
+$string['privacy:metadata:icontent_pages_notes_like:userid'] = 'ID of the user who liked the note/question.';
+$string['privacy:metadata:icontent_question_attempts'] = 'User attempts on iContent embedded questions.';
+$string['privacy:metadata:icontent_question_attempts:answertext'] = 'Stored submitted answer text/value.';
+$string['privacy:metadata:icontent_question_attempts:cmid'] = 'ID of the iContent course module.';
+$string['privacy:metadata:icontent_question_attempts:fraction'] = 'Fraction/score awarded for the attempt.';
+$string['privacy:metadata:icontent_question_attempts:pagesquestionsid'] = 'ID of the page question mapping.';
+$string['privacy:metadata:icontent_question_attempts:questionid'] = 'ID of the Moodle question attempted.';
+$string['privacy:metadata:icontent_question_attempts:rightanswer'] = 'Stored right answer data for reporting.';
+$string['privacy:metadata:icontent_question_attempts:timecreated'] = 'Time the question attempt was created.';
+$string['privacy:metadata:icontent_question_attempts:userid'] = 'ID of the user who attempted the question.';
 $string['private'] = 'Private';
 $string['privates'] = 'Private';
 $string['progressbar'] = 'Progress bar';
 $string['progressbar_help'] = 'If enabled, a bar is displayed at the bottom of lesson pages showing approximate percentage of completion.';
-$string['questions'] = 'Questions';
 $string['questionenginephase1'] = 'Question engine migration (Phase 1)';
 $string['questionenginephase1_help'] = 'Enable initial wiring of iContent true/false questions to Moodle question engine usage (QUBA) while keeping current iContent rendering and submit behavior.';
+$string['questions'] = 'Questions';
 $string['random'] = 'Random';
 $string['reassess'] = 'Reassess';
+$string['recentactivityaddednote'] = 'Added a note on {$a}';
+$string['recentactivityaddedquestion'] = 'Added a question on {$a}';
+$string['recentactivityattemptedquestion'] = 'Attempted a question on {$a}';
+$string['recentactivityheader'] = 'Recent iContent activity';
+$string['recentactivityrepliednote'] = 'Replied on {$a}';
+$string['recentactivityviewedpage'] = 'Viewed {$a}';
 $string['remove'] = ' Remove ';
 $string['removenote'] = ' Remove note';
 $string['removenotes'] = ' Remove notes';
@@ -296,6 +290,16 @@ $string['respond'] = ' Responded ';
 $string['result'] = 'Result';
 $string['resultlastattempt'] = 'Result of the last attempt';
 $string['results'] = 'Results';
+$string['reviewercomments'] = 'Teacher comments';
+
+
+
+
+
+
+
+
+
 $string['rightanswers'] = 'Right answers';
 $string['save'] = 'Save';
 $string['send'] = 'Send';
@@ -311,14 +315,6 @@ $string['shownotesarea'] = 'Show notes area';
 $string['shownotesarea_help'] = 'Select "Yes" to display the notes area.';
 $string['showrecentactivity'] = 'Show recent activity';
 $string['showrecentactivityconfig'] = 'Everyone can see notifications in recent activity reports.';
-$string['recentactivityheader'] = 'Recent iContent activity';
-$string['recentactivityviewedpage'] = 'Viewed {$a}';
-$string['recentactivityaddednote'] = 'Added a note on {$a}';
-$string['recentactivityaddedquestion'] = 'Added a question on {$a}';
-$string['recentactivityrepliednote'] = 'Replied on {$a}';
-$string['recentactivityattemptedquestion'] = 'Attempted a question on {$a}';
-$string['pagex'] = 'Page {$a}';
-$string['pagexwithtitle'] = 'Page {$a->pagenum}: {$a->title}';
 $string['showtitle'] = 'Show title';
 $string['showtitle_help'] = 'Show / Hide the page title.';
 $string['state'] = 'State';
@@ -349,5 +345,5 @@ $string['usepassword'] = 'Password protected Content Pages';
 $string['usepassword_help'] = 'If enabled, a password is required in order to access the Content Pages.';
 $string['writedoubt'] = 'Write question';
 $string['writeessay'] = 'Write essay';
-$string['writetag'] = 'Write tags (comma-separated)';
 $string['writenotes'] = 'Write note';
+$string['writetag'] = 'Write tags (comma-separated)';

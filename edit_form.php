@@ -24,13 +24,12 @@
 
 defined('MOODLE_INTERNAL') || die;
 
-require_once($CFG->libdir.'/formslib.php');
+require_once($CFG->libdir . '/formslib.php');
 
 /**
  * Class mod_icontent_pages_edit_form
  */
 class icontent_pages_edit_form extends moodleform {
-
     /**
      * Define form elements
      * @throws coding_exception
@@ -46,7 +45,10 @@ class icontent_pages_edit_form extends moodleform {
         $icontentconfig = get_config('mod_icontent');
 
         $page->bgcolor = self::format_colour_for_picker($page->bgcolor ?? $icontentconfig->bgcolor ?? '#FCFCFC', '#FCFCFC');
-        $page->bordercolor = self::format_colour_for_picker($page->bordercolor ?? $icontentconfig->bordercolor ?? '#E4E4E4', '#E4E4E4');
+        $page->bordercolor = self::format_colour_for_picker(
+            $page->bordercolor ?? $icontentconfig->bordercolor ?? '#E4E4E4',
+            '#E4E4E4'
+        );
 
         if (!empty($page->id)) {
             $mform->addElement('header', 'general', get_string('editingpage', 'icontent'));
@@ -143,9 +145,7 @@ class icontent_pages_edit_form extends moodleform {
         $mform->setType('bgimage', PARAM_INT);
         $mform->addHelpButton('bgimage', 'bgimagepagehelp', 'icontent');
 
-        // ...$mform->addElement('text', 'bgcolor', get_string('bgcolor', 'icontent'), ['class' => 'color', 'value' => 'FCFCFC']);.
-        // ...$mform->setType('bgcolor', PARAM_TEXT);.
-        // ...$mform->addHelpButton('bgcolor', 'bgcolorpagehelp', 'icontent');.
+        // Legacy bgcolor field setup comments removed.
 
         $bgattributes = ['id' => 'icontent_bgcolor_picker', 'size' => '10', 'maxlength' => '7'];
         $mform->addElement('text', 'bgcolor', get_string('bgcolor', 'icontent'), $bgattributes);
@@ -223,10 +223,13 @@ class icontent_pages_edit_form extends moodleform {
         $mform->setDefault('expandnotesarea', 0);
 
         $mform->addElement('header', 'grade', get_string('gradenoun'));
-        $mform->addElement('select', 'attemptsallowed', get_string('attemptsallowed', 'icontent'),
+        $mform->addElement(
+            'select',
+            'attemptsallowed',
+            get_string('attemptsallowed', 'icontent'),
             [
                 '0' => get_string('unlimited'),
-                '1' => '1 '.get_string('attempt', 'mod_icontent'),
+                '1' => '1 ' . get_string('attempt', 'mod_icontent'),
             ]
         );
         $mform->addHelpButton('attemptsallowed', 'attemptsallowedhelp', 'icontent');
@@ -269,13 +272,13 @@ class icontent_pages_edit_form extends moodleform {
     protected static function format_colour_for_picker($value, $fallback) {
         $default = strtoupper((string)$fallback);
         if ($default === '' || $default[0] !== '#') {
-            $default = '#'.ltrim($default, '#');
+            $default = '#' . ltrim($default, '#');
         }
         if (!preg_match('/^#[0-9A-F]{6}$/', $default)) {
             $default = '#FCFCFC';
         }
 
-        $raw = '#'.strtoupper(ltrim(trim((string)$value), '#'));
+        $raw = '#' . strtoupper(ltrim(trim((string)$value), '#'));
         if (!preg_match('/^#[0-9A-F]{6}$/', $raw)) {
             return $default;
         }

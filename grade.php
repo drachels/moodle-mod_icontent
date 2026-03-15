@@ -22,8 +22,8 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-require(dirname(__FILE__).'/../../config.php');
-require_once(dirname(__FILE__).'/locallib.php');
+require(dirname(__FILE__) . '/../../config.php');
+require_once(dirname(__FILE__) . '/locallib.php');
 
 $id = required_param('id', PARAM_INT); // Course Module ID.
 $pageid = optional_param('pageid', 0, PARAM_INT); // Page note ID.
@@ -53,7 +53,7 @@ echo $OUTPUT->heading(get_string('summaryattempts', 'mod_icontent'), 3);
 $gradesurl = new moodle_url('/mod/icontent/grade.php', ['id' => $id, 'action' => 'overview', 'group' => $group]);
 $manualreviewurl = new moodle_url('/mod/icontent/grading.php', ['id' => $id, 'action' => 'grading', 'group' => $group]);
 $modetoggle = html_writer::div(
-    html_writer::link($gradesurl, get_string('grades'), ['class' => 'btn btn-primary mr-2']).
+    html_writer::link($gradesurl, get_string('grades'), ['class' => 'btn btn-primary mr-2']) .
     html_writer::link($manualreviewurl, get_string('manualreview', 'mod_icontent'), ['class' => 'btn btn-secondary']),
     'mb-3 icontent-results-mode-toggle'
 );
@@ -91,22 +91,26 @@ if ($attemptsusers) {
     foreach ($attemptsusers as $attemptuser) {
         // Get picture.
         $picture = $OUTPUT->user_picture($attemptuser, ['size' => 35, 'class' => 'img-thumbnail pull-left']);
-        $linkfirstname = html_writer::link(new moodle_url('/user/view.php',
-            [
+        $linkfirstname = html_writer::link(
+            new moodle_url(
+                '/user/view.php',
+                [
                 'id' => $attemptuser->id,
                 'course' => $course->id,
-            ]
+                ]
             ),
-            $attemptuser->firstname.' '.$attemptuser->lastname,
+            $attemptuser->firstname . ' ' . $attemptuser->lastname,
             [
                 'title' => $attemptuser->firstname,
                 'class' => 'lkfullname',
             ]
         );
         // String open answers for user.
-        $stropenanswer = $attemptuser->totalopenanswers ? get_string('stropenanswer',
+        $stropenanswer = $attemptuser->totalopenanswers ? get_string(
+            'stropenanswer',
             'mod_icontent',
-            $attemptuser->totalopenanswers) : '';
+            $attemptuser->totalopenanswers
+        ) : '';
         // String evaluate.
         $evaluate = new stdClass();
         $evaluate->fraction = number_format($attemptuser->sumfraction, 2);
@@ -117,7 +121,7 @@ if ($attemptsusers) {
         $strevaluate = get_string('strtoevaluate', 'mod_icontent', $evaluate);
         // Set data.
         $table->data[] = [
-            $picture.$linkfirstname,
+            $picture . $linkfirstname,
             $attemptuser->totalanswers,
             $strevaluate,
             number_format($evaluate->finalgrade, 2),

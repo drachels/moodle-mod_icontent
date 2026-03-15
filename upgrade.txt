@@ -19,124 +19,169 @@ This files describes API changes and other work in the iContent code.
 20240827 iContent_1309 - iContent - Need to implement viewaftertimeclose capability.
 
 
-=== 2.0.0 === pending
-20231223 iContent_1138bt - There does not seem to be a way to get to the index.php page.
+=== 2.0.5 === pending
+20260306 iContent_1432 - Due to changes to the, icontent_question_attempts, table need to
+    verify backup and restore work correctly.
+20260314 iContent_1441 - Users on the Questions tab can see other user question marked tutor only.
+
+
+=== 2.0.4 === 20260312
+20231223 iContent_1138r - There does not seem to be a way to get to the index.php page.
     Major work in progress to add more detail to the index.php page and create new
     icontent/classes/local/icontent_info.php file. As of 20260227 created new overview.php
     that was needed.
-    2026030508 - iContent_1138bt: Fix is implemented and verified (index/overview navigation
-    restored), but status remains bt until 2.0.0 is officially released.
-20231225 iContent_1142bt - Need to verify move.php works. It does and works as expected.
+    2026030508 - iContent_1138r: Fix is implemented and verified (index/overview navigation
+    restored), released in 2.0.3.
+    20260312​01 - Fixed index/overview navigation restoration.
+20231225 iContent_1142r - Need to verify move.php works. It does and works as expected.
     Made change in lines 54-71 to get rid of an empty, if. As of 20260227 Copilot Pro has also
-    added the missing toolbar to cover pages. See tickt for details.
-20231231 iContent_1151bt - Returning to add more questions, wipes out previous ones.
-    2026030545 - iContent_1151bt: Fix is implemented and verified via the
+    added the missing toolbar to cover pages. See ticket for details.
+    20260312​02 - Added toolbar to cover pages for editing.
+20231225 iContent_1143r - iContent - The grade.php page is using deprecated user_picture::fields().
+    See the ticket for fix details. 20260312 Verified code works correctly.
+20231231 iContent_1151r - Returning to add more questions, wipes out previous ones.
+    2026030545 - iContent_1151r: Fix is implemented and verified via the
     addquestionpage add/merge behavior updates that preserve existing page questions;
-    status remains bt until 2.0.0 is officially released.
-20240107 iContent_1159bt - Need to have a setting for ICONTENT_PER_PAGE, or, need to be
+    released in 2.0.3.
+    20260312​03 - Fixed addquestionpage to preserve existing questions.
+20240107 iContent_1159r - Need to have a setting for ICONTENT_PER_PAGE, or, need to be
     able add questions from multiple pages.
-    2026030546 - iContent_1159bt: Fix is implemented and verified through the
-    addquestionpage/category pagination and multi-page selection improvements; status
-    remains bt until 2.0.0 is officially released.
-20240205 iContent_1192bt - Need to create a privacy class. 20240209 Created the file.
+    2026030546 - iContent_1159r: Fix is implemented and verified through the
+    addquestionpage/category pagination and multi-page selection improvements; released
+    in 2.0.3.
+    20260312​04 - Implemented pagination in addquestionpage.
+20240108 iContent_1161r - Displayed list of possible answers is not being shuffled in
+    Matching type question. 20260312 Virified this was fixed along with iContent_1205.
+20240205 iContent_1192r - Need to create a privacy class. 20240209 Created the file.
     Now need to update the code to change all references from diary to icontent. - DONE
     20260227 Updated provider.php to use iContent tables/fields and added
     mod/icontent/tests/privacy/provider_test.php with context and delete-data coverage.
-20240212 iContent_1206bt - Feture request - Change color settings code to allow for
+    20260312​05 - Created and verified privacy provider class.
+20240212 iContent_1206r - Feture request - Change color settings code to allow for
     word colors.
-    2026030547 - iContent_1206bt: With the Moodle default editor now available while
+    2026030547 - iContent_1206r: With the Moodle default editor now available while
     editing iContent slides/pages, teachers can apply foreground/background colors to
-    individual words and characters; status remains bt until 2.0.0 is officially released.
-20240728 iContent_1287bt - Color settings are problematic due to # being required in the settings
+    individual words and characters; released in 2.0.3.
+    20260312​06 - Enabled word/character colors via Moodle editor.
+20240728 iContent_1287r - Color settings are problematic due to # being required in the settings
     but NOT in mod_form and edit_form.
-    2026030548 - iContent_1287bt: Verified fix by aligning mod_form color picker
+    2026030548 - iContent_1287r: Verified fix by aligning mod_form color picker
     handling with edit_form, normalizing #RRGGBB defaults from settings.php so
-    configured colors now apply reliably; status remains bt until 2.0.0 is officially released.
-20240728 iContent_1285bt - iContent - Need to verify that Bookmark code is working correctly.
-    2026030556 - iContent_1285bt: Verified bookmark/resume behavior in Questions
+    configured colors now apply reliably; released in 2.0.3.
+    20260312​07 - Fixed color settings normalization (#RRGGBB format).
+20240721 iContent_1279r - Previous button is not named the same on the bottom of a slide/page.
+    See the ticket for details. 20260312 Verified fixed in the UX.
+20240726 iContent_1281r - Need CSS setting for text paragraph indents to be zero. See
+    the ticket for further details. 20260312 Verified correct format in the UX.
+20240726 iContent_1282r - iContent - While working on quiz questions it would be nice to
+    know the category name and ID. See the ticket for details. 20260312 Verified
+    and working in UX.
+20240728 iContent_1285r - iContent - Need to verify that Bookmark code is working correctly.
+    2026030556 - iContent_1285r: Verified bookmark/resume behavior in Questions
     Testing: users return to the last page with unanswered questions while work
     remains, and after all pages/questions are completed they re-enter on the
-    cover page (or first page if no cover page); status remains bt until 2.0.0
-    is officially released.
-20240920 iContent_1321bt - I am unable to Like, or Unlike a Note.
-    2026030552 - iContent_1321bt: Verified note actions (Edit/Reply/Like/Remove)
+    cover page (or first page if no cover page); released in 2.0.3.
+    20260312​08 - Verified bookmark/resume behavior in Questions.
+20240920 iContent_1321r - I am unable to Like, or Unlike a Note.
+    2026030552 - iContent_1321r: Verified note actions (Edit/Reply/Like/Remove)
     now work as expected after recent fixes, and widened the note/question input
-    boxes in the notes area for better authoring usability; status remains bt until
-    2.0.0 is officially released.
-    2026030553 - iContent_1321bt: Follow-up UI polish widened both inline Edit and
-    Reply textareas for better authoring usability; status remains bt until 2.0.0 is
-    officially released.
-20240922 iContent_1322bt - Need to verify code in lib.php function icontent_print_recent_activity.
-    2026030554 - iContent_1322bt: Verified and fixed recent activity reporting so
+    boxes in the notes area for better authoring usability; released in 2.0.3.
+    2026030553 - iContent_1321r: Follow-up UI polish widened both inline Edit and
+    Reply textareas for better authoring usability; released in 2.0.3.
+    20260312​09 - Verified note actions and improved textarea width.
+20240922 iContent_1322r - Need to verify code in lib.php function icontent_print_recent_activity.
+    2026030554 - iContent_1322r: Verified and fixed recent activity reporting so
     student iContent actions (page views, notes/questions/replies, and question
-    attempts) now appear in the Recent activity block; status remains bt until
-    2.0.0 is officially released.
-20241008 iContent_1429bt - Investigate creating an iContent Tags block.
-    2026030555 - iContent_1429bt: Implemented and verified per-page tags display
+    attempts) now appear in the Recent activity block; released in 2.0.3.
+    20260312​10 - Fixed recent activity reporting for iContent actions.
+20241008 iContent_1429r - Investigate creating an iContent Tags block.
+    2026030555 - iContent_1429r: Implemented and verified per-page tags display
     on both cover and content pages; students can view tags while only teachers/admin
-    can add or edit them; status remains bt until 2.0.0 is officially released.
-20240915 iContent_1318bt - Need to add the page ID to the URL when viewing a page. With assistance
+    can add or edit them; released in 2.0.3.
+    20260312​11 - Implemented per-page tags display.
+20240915 iContent_1318r - Need to add the page ID to the URL when viewing a page. With assistance
     from Copilot Pro AI, the pgae ID is shown in the URL for each page. Originally reported
     on 20240915 in a Moodle discussion, as of 20260227 this appears to be fixed.
-20250602 iContent_1379 - iContent Pages - Cover page does not show toolbar forediting or making
+    20260312​12 - Added page ID to URL for each page.
+20250602 iContent_1379r - iContent Pages - Cover page does not show toolbar forediting or making
     changes to the page. 20260227 With assistance from Copilot Pro AI, this appears
     to be fixed by including the toolbar in cover page rendering.
-20260227 iContent_1416bt - Trying to add/edit questions to a slide is broken. With assistance from
+    20260312​13 - Fixed cover page toolbar rendering.
+20260227 iContent_1416r - Trying to add/edit questions to a slide is broken. With assistance from
     Copilot Pro AI, the teacher can now add questions, again. Also the matching question ticket
     iContent_1161 appears to be fixed also.
-20260228 iContent - Added feature-flagged Question Engine migration phases for iContent questions.
+    20260312​14 - Fixed add/edit questions flow.
+20260228 iContent_1436r - Added feature-flagged Question Engine migration phases for iContent questions.
     Phase 1 adds QUBA bootstrap/session wiring. Phase 2 renders supported questions from QUBA.
     Phase 3 processes submitted actions through QUBA and stores attempt summaries in existing
     iContent tables for reporting/grades. Phase 4 expands supported qtypes to truefalse,
-    multichoice, match, and essay (essay remains mapped to toevaluate for manual review).
-20260228 iContent - Updated addquestionpage.php to use a question-bank-like picker UX with
+    multichoice, match, and essay (essay remains mapped to evaluate for manual review).
+    20260312​14 - Fixed migration QUBA questions flow.
+20260228 iContent_1437r - Updated addquestionpage.php to use a question-bank-like picker UX with
     category selection, cleaner columns, comments/statistics display, column action menus,
     and corrected Preview/Edit return flows back to the current iContent category/page.
-20240718 iContent_1272bt - Group mode is on the settings page, but is not used anywhere in the
+    20260312 - Implemented new UX for picking questions to use.
+20240718 iContent_1272r - Group mode is on the settings page, but is not used anywhere in the
     code #35.
-    2026030549 - iContent_1272bt: Scope clarified - implement a group selector on
+    2026030549 - iContent_1272r: Scope clarified - implement a group selector on
     icontent/grade.php for both Grades mode and Manual review mode so group-based
     grading/review workflows can be filtered correctly.
-    2026030550 - iContent_1272bt: Implemented group selectors and filtering in
+    2026030550 - iContent_1272r: Implemented group selectors and filtering in
     both grade.php (Grades) and grading.php (Manual review), with selected-group
-    pagination/counts applied consistently; status remains bt until 2.0.0 is released.
-    2026030551 - iContent_1272bt: Follow-up UI fix adds always-visible Results-mode
+    pagination/counts applied consistently; released in 2.0.3.
+    2026030551 - iContent_1272r: Follow-up UI fix adds always-visible Results-mode
     toggle buttons (Grades and Manual review) on both pages so teachers can switch
     views reliably while keeping group filtering active.
-20240715 iContent_1267bt - Unable to delete a question from a slide.
+    20260312​15 - Implemented group filtering in grade/grading.
+20240715 iContent_1267r - Unable to delete a question from a slide.
     Fixed on 20260304 by adding in-page per-question remove controls with capability/sesskey
-    checks and attempt guards; remains bt until 2.0.0 is officially released.
-20260228 iContent_1417 - Feature requests - Need a color selector for a slide background or
+    checks and attempt guards; released in 2.0.3.
+    20260312​16 - Added per-question remove controls.
+20260228 iContent_1438r - Feature requests - Need a color selector for a slide background or
     border color. Added code to make color selectors similar to the one developed for the
-    prompt_edit.php file in diary.
-20260302 iContent_1420 - Feature request - For manual marking type question set, Right answers,
+    prompt_edit.php file in diary. iContent_1417 got lost in the shuffle and was a duplicate.
+    20260312 Implemented color selector for background and border settings.
+20260302 iContent_1420r - Feature request - For manual marking type question set, Right answers,
     to, Pending.
-20260302 iContent_1421 - Manual review and feedback enhancements for essay and poodllrecording
+    20260312​17 - Feature: Set manual marking answers to Pending.
+20260302 iContent_1439r - Manual review and feedback enhancements for essay and poodllrecording
     (picture/sketch) responses. Added reviewer comments, improved manual-review answer rendering,
     and included submitted answers plus teacher comments in Result of the last attempt.
-20260302 iContent_1422 - Student essay response input now uses the site's default text editor
+    20260312 Implemented manual-review for these question types.
+20260301iContent_1418r - When trying to add questions, an empty category leaves you stranded.
+    20260312 Implemented additonal page content UX items to let you go to another category.
+20260302 iContent_1422r - Feature Request - Need better input capability for essay questions.
+    Student essay response input now uses the site's default text editor
     instead of a plain textarea in iContent question answering.
-20260302 iContent_1423 - Drag-and-drop/image question rendering fix. Added schema-safe question
+    20260312 Implemented using the text editor for creating essay answers and for the
+    teacher text input when manually marking the responses.
+20260302 iContent_1423r - Drag-and-drop/image question rendering fix. Added schema-safe question
     file proxy handling in mod_icontent so question prompt images load correctly for students,
     teachers, and admins; validated with 2 student accounts plus teacher and admin roles.
-20260304 iContent_1424bt - Improved question-management UX for iContent pages.
+    20260312​18 - Fixed drag-and-drop/image question rendering.
+20260304 iContent_1424 - Improved question-management UX for iContent pages.
     Updated addquestionpage behavior to add/merge selected questions without deleting existing
     page questions, preventing accidental loss when browsing category pages. Also added a direct
     per-question remove action in view edit mode (blocked when attempts already exist on page).
-20260304 iContent_1425bt - Follow-up fix for per-question remove controls in edit mode.
+20260304 iContent_1425 - Follow-up fix for per-question remove controls in edit mode.
     Ensured remove icon/tool renders for Question Engine-rendered questions and added a
     client-side confirmation prompt before removing a question from the page.
-20260304 iContent_1426gt - Hardening and regression coverage for question remove action.
+20260304 iContent_1426 - Hardening and regression coverage for question remove action.
     Added fallback confirmation text when language string resolution returns a missing-string
     token and introduced Behat scenario coverage for edit-mode remove icon visibility plus
     successful question unlink action.
-20260304 iContent_1427bt - Added remove-control guard regression scenario.
+20260304 iContent_1427r - Added remove-control guard regression scenario.
     Added Behat coverage to verify the per-question remove icon is hidden in edit mode when
     attempts already exist on the page.
-20260304 iContent_1426 - Feature Request - Need some basic Behat tests for iContent Pages.
+    20260312​19 - Added remove-control guard regression coverage.
+20260304 iContent_1428r - Feature Request - Need some basic Behat tests for iContent Pages.
     Began adding .feature files in the test/behat, folder. Will add more, as needed.
     See mod/icontent/tests/behat/README.md for the current feature map and run commands.
-
+    20260312 Behat tests have been added and currently, all run successfully.
+20260305 iContent_1429r - Investigate creating an iContent Tags block.  Implemented and
+    verified per-page tags display on both cover and content pages; students can view tags
+    while only teachers/admin can add or edit them; released in 2.0.3.
+    20260312 Implemented so teachers can add tags to any slide/page.
 
 === 1.0.7.2 === pending (Build: 2024061600) bumped version 2024061600
 
@@ -204,14 +249,17 @@ This files describes API changes and other work in the iContent code.
 20240724 iContent_1280r - Background image upload and use is broken. Line 122 of the
     edit_form.php was causing the problem. Right now commented out and will delete later.
 20240727 iContent_1283r - Appearance> Page layout collumns2-5, are spelled wrong. Changed
-    spelling as needed in the edit_form.php settings file and the icontent.php languag file.
+    spelling as needed in the edit_form.php settings file and the icontent.php language file.
+    20260312 Verified now using correct spelling.
 20240727 iContent_1284r - iContent - Feature request to hide all the in-between slide/page
     navigation buttons above the page content. See ticket for details. Currently set to
     show buttons if five or fewer pages. If greater than five pages, then top nav looks
     the same as the bottom nav.
+    20260312 Verified UX hides if over ten pages.
 20240728 iContent_1286r - iContent - iContent activity heading and descriptions are being
     shown twice. Modified code in the view.php file to remove the duplicates. See ticket
     for further details.
+    20260312 Veified UX works as it should.
 20240729 iContent_1288r - The styles.css file needs some attention re: line-height for the
     content page text area. Setting was missing from where it should have been in the
     styles.css file. Added missing setting in line 283.

@@ -27,7 +27,6 @@ defined('MOODLE_INTERNAL') || die(); // @codingStandardsIgnoreLine
  * Class mod_icontent_renderer
  */
 class mod_icontent_renderer extends plugin_renderer_base {
-
     /**
      * Renders the iContent page header CSS. {@link http://fontawesome.io}.
      *

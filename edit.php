@@ -24,9 +24,9 @@
 
 use mod_icontent\local\icontent_info;
 
-require(dirname(__FILE__).'/../../config.php');
-require_once(dirname(__FILE__).'/locallib.php');
-require_once(dirname(__FILE__).'/edit_form.php');
+require(dirname(__FILE__) . '/../../config.php');
+require_once(dirname(__FILE__) . '/locallib.php');
+require_once(dirname(__FILE__) . '/edit_form.php');
 
 $cmid = required_param('cmid', PARAM_INT);  // Content Course Module ID.
 $pageid = optional_param('id', 0, PARAM_INT); // Page ID.
@@ -84,7 +84,6 @@ if ($mform->is_cancelled()) {
     } else {
         redirect("view.php?id=$cm->id&pageid=$page->id");
     }
-
 } else if ($data = $mform->get_data()) {
     $data->bgcolor = icontent_normalize_hex_colour($data->bgcolor, $icontent->bgcolor);
     $data->bordercolor = icontent_normalize_hex_colour($data->bordercolor, $icontent->bordercolor);
@@ -102,7 +101,8 @@ if ($mform->is_cancelled()) {
     if ($data->id) {
         // Store the files.
         $data->timemodified = time();
-        $data = file_postupdate_standard_editor($data,
+        $data = file_postupdate_standard_editor(
+            $data,
             'pageicontent',
             $pageicontentoptions,
             $context,
@@ -112,7 +112,9 @@ if ($mform->is_cancelled()) {
         );
         $DB->update_record('icontent_pages', $data);
         // Saving file bgarea in the filemanager.
-        file_save_draft_area_files($data->bgimage, $context->id,
+        file_save_draft_area_files(
+            $data->bgimage,
+            $context->id,
             'mod_icontent',
             'bgpage',
             $data->id,
@@ -131,7 +133,8 @@ if ($mform->is_cancelled()) {
         $data->pageicontent = ''; // Updated later.
         $data->pageicontentformat = FORMAT_HTML; // Updated later.
         $data->id = $DB->insert_record('icontent_pages', $data);
-        $data = file_postupdate_standard_editor($data,
+        $data = file_postupdate_standard_editor(
+            $data,
             'pageicontent',
             $pageicontentoptions,
             $context,
@@ -141,7 +144,8 @@ if ($mform->is_cancelled()) {
         );
         $DB->update_record('icontent_pages', $data);
         // Saving file bgarea in the filemanager.
-        file_save_draft_area_files($data->bgimage,
+        file_save_draft_area_files(
+            $data->bgimage,
             $context->id,
             'mod_icontent',
             'bgpage',

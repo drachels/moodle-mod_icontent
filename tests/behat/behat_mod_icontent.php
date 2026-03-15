@@ -19,17 +19,18 @@
  *
  * @package    mod_icontent
  * @category   test
+ * @copyright  2024 bdecent GmbH <https://bdecent.de>
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-defined('MOODLE_INTERNAL') || die();
-
+// NOTE: no MOODLE_INTERNAL test here, this file may be required by behat before including /config.php.
 require_once(__DIR__ . '/../../../../lib/behat/behat_base.php');
+// phpcs:disable moodle.Files.LineLength.MaxExceeded
 
 /**
  * iContent Behat context.
  */
 class behat_mod_icontent extends behat_base {
-
     /**
      * Resolve an iContent course module by activity name.
      *
@@ -72,7 +73,7 @@ class behat_mod_icontent extends behat_base {
     /**
      * Create a simple iContent page for a named activity.
      *
-     * @Given /^the icontent "(?P<activity_string>(?:[^"\\]|\\.)*)" has a page titled "(?P<title_string>(?:[^"\\]|\\.)*)" with content "(?P<content_string>(?:[^"\\]|\\.)*)"$/
+     * @Given /^the icontent "(?P<activity>[^"]*)" has a page titled "(?P<title>[^"]*)" with content "(?P<content>[^"]*)"$/
      *
      * @param string $activity
      * @param string $title
@@ -134,7 +135,7 @@ class behat_mod_icontent extends behat_base {
     /**
      * Link an existing question to an iContent page and create an evaluated attempt with reviewer comment.
      *
-     * @Given /^the icontent "(?P<activity_string>(?:[^"\\]|\\.)*)" page "(?P<pagetitle_string>(?:[^"\\]|\\.)*)" links question "(?P<questionname_string>(?:[^"\\]|\\.)*)" and has an evaluated attempt for "(?P<username_string>(?:[^"\\]|\\.)*)" with answer "(?P<answer_string>(?:[^"\\]|\\.)*)" and teacher comment "(?P<comment_string>(?:[^"\\]|\\.)*)"$/
+     * @Given /^the icontent "(?P<activity>[^"]*)" page "(?P<pagetitle>[^"]*)" links question "(?P<questionname>[^"]*)" and has an evaluated attempt for "(?P<username>[^"]*)" with answer "(?P<answer>[^"]*)" and teacher comment "(?P<comment>[^"]*)"$/
      *
      * @param string $activity
      * @param string $pagetitle
@@ -198,7 +199,7 @@ class behat_mod_icontent extends behat_base {
     /**
      * Link an existing question to an iContent page and create a pending manual-review attempt.
      *
-     * @Given /^the icontent "(?P<activity_string>(?:[^"\\]|\\.)*)" page "(?P<pagetitle_string>(?:[^"\\]|\\.)*)" links question "(?P<questionname_string>(?:[^"\\]|\\.)*)" and has a pending attempt for "(?P<username_string>(?:[^"\\]|\\.)*)" with answer "(?P<answer_string>(?:[^"\\]|\\.)*)"$/
+     * @Given /^the icontent "(?P<activity>[^"]*)" page "(?P<pagetitle>[^"]*)" links question "(?P<questionname>[^"]*)" and has a pending attempt for "(?P<username>[^"]*)" with answer "(?P<answer>[^"]*)"$/
      *
      * @param string $activity
      * @param string $pagetitle
@@ -260,7 +261,7 @@ class behat_mod_icontent extends behat_base {
     /**
      * Link an existing question to an iContent page and create an auto-graded attempt.
      *
-     * @Given /^the icontent "(?P<activity_string>(?:[^"\\]|\\.)*)" page "(?P<pagetitle_string>(?:[^"\\]|\\.)*)" links question "(?P<questionname_string>(?:[^"\\]|\\.)*)" and has a graded attempt for "(?P<username_string>(?:[^"\\]|\\.)*)" with answer "(?P<answer_string>(?:[^"\\]|\\.)*)"$/
+     * @Given /^the icontent "(?P<activity>[^"]*)" page "(?P<pagetitle>[^"]*)" links question "(?P<questionname>[^"]*)" and has a graded attempt for "(?P<username>[^"]*)" with answer "(?P<answer>[^"]*)"$/
      *
      * @param string $activity
      * @param string $pagetitle
@@ -322,7 +323,7 @@ class behat_mod_icontent extends behat_base {
     /**
      * Link an existing question to an iContent page without creating attempts.
      *
-     * @Given /^the icontent "(?P<activity_string>(?:[^"\\]|\\.)*)" page "(?P<pagetitle_string>(?:[^"\\]|\\.)*)" links question "(?P<questionname_string>(?:[^"\\]|\\.)*)"$/
+     * @Given /^the icontent "([^"]*)" page "([^"]*)" links question "([^"]*)"$/
      *
      * @param string $activity
      * @param string $pagetitle
@@ -365,7 +366,7 @@ class behat_mod_icontent extends behat_base {
     /**
      * Remove a linked question from an iContent page as the current user.
      *
-     * @When /^I remove question "(?P<questionname_string>(?:[^"\\]|\\.)*)" from page "(?P<pagetitle_string>(?:[^"\\]|\\.)*)" in icontent "(?P<activity_string>(?:[^"\\]|\\.)*)"$/
+     * @When /^I remove question "([^"]*)" from page "([^"]*)" in icontent "([^"]*)"$/
      *
      * @param string $questionname
      * @param string $pagetitle
@@ -401,7 +402,7 @@ class behat_mod_icontent extends behat_base {
     /**
      * Assert that an iContent activity includes at least one linked question of a given qtype.
      *
-     * @Then /^the icontent "(?P<activity_string>(?:[^"\\]|\\.)*)" should include question type "(?P<qtype_string>(?:[^"\\]|\\.)*)"$/
+     * @Then /^the icontent "(?P<activity_string>[^"]*)" should include question type "(?P<qtype_string>[^"]*)"$/
      *
      * @param string $activity
      * @param string $qtype
@@ -429,7 +430,7 @@ class behat_mod_icontent extends behat_base {
     /**
      * Assert that an iContent activity includes a specific page/question/qtype mapping.
      *
-     * @Then /^the icontent "(?P<activity_string>(?:[^"\\]|\\.)*)" should include page "(?P<pagetitle_string>(?:[^"\\]|\\.)*)" with question "(?P<questionname_string>(?:[^"\\]|\\.)*)" of type "(?P<qtype_string>(?:[^"\\]|\\.)*)"$/
+     * @Then /^the icontent "([^"]*)" should include page "([^"]*)" with question "([^"]*)" of type "([^"]*)"$/
      *
      * @param string $activity
      * @param string $pagetitle
@@ -468,7 +469,7 @@ class behat_mod_icontent extends behat_base {
     /**
      * Assert that an iContent activity does not include a specific page/question mapping.
      *
-     * @Then /^the icontent "(?P<activity_string>(?:[^"\\]|\\.)*)" should not include page "(?P<pagetitle_string>(?:[^"\\]|\\.)*)" with question "(?P<questionname_string>(?:[^"\\]|\\.)*)"$/
+     * @Then /^the icontent "([^"]*)" should not include page "([^"]*)" with question "([^"]*)"$/
      *
      * @param string $activity
      * @param string $pagetitle
@@ -501,3 +502,4 @@ class behat_mod_icontent extends behat_base {
         }
     }
 }
+// phpcs:enable moodle.Files.LineLength.MaxExceeded
