@@ -367,6 +367,12 @@ define(['jquery', 'jqueryui', 'mod_icontent/cookiehandler'], function($, jqui, c
      *
      */
     function onSaveAttempAnswers() {
+        if (window.tinyMCE && typeof window.tinyMCE.triggerSave === 'function') {
+            window.tinyMCE.triggerSave();
+        } else if (window.tinymce && typeof window.tinymce.triggerSave === 'function') {
+            window.tinymce.triggerSave();
+        }
+
         var formdata = $(this).serialize();
         var cmid = parseInt($("#idhfieldcmid").val());
         var sesskey = $("#idhfieldsesskey").val();

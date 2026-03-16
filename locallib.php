@@ -37,6 +37,7 @@ define('ICONTENT_QTYPE_MATCH', 'match');
 define('ICONTENT_QTYPE_MULTICHOICE', 'multichoice');
 define('ICONTENT_QTYPE_TRUEFALSE', 'truefalse');
 define('ICONTENT_QTYPE_ESSAY', 'essay');
+define('ICONTENT_QTYPE_ESSAYAUTOGRADE', 'essayautograde');
 define('ICONTENT_QTYPE_ESSAY_STATUS_TOEVALUATE', 'toevaluate');
 define('ICONTENT_QTYPE_ESSAY_STATUS_VALUED', 'valued');
 define('ICONTENT_QUESTION_FRACTION', 1);
@@ -181,7 +182,7 @@ function icontent_question_engine_phase1_bootstrap_usage($objpage, $questions) {
             if (count($existingquba->get_slots()) === $targetcount && $existingquestionids === $targetquestionids) {
                 return;
             }
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             debugging('Failed to load existing question usage: ' . $e->getMessage(), DEBUG_DEVELOPER);
         }
     }
@@ -194,7 +195,7 @@ function icontent_question_engine_phase1_bootstrap_usage($objpage, $questions) {
         try {
             $questiondef = question_bank::load_question($question->qid);
             $quba->add_question($questiondef, 1);
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             // Skip invalid question definitions and continue with remaining items.
             continue;
         }
@@ -249,7 +250,7 @@ function icontent_question_engine_phase2_render_question($objpage, $question, $d
 
     try {
         $quba = question_engine::load_questions_usage_by_activity($qubaid);
-    } catch (Exception $e) {
+    } catch (\Throwable $e) {
         return false;
     }
 
@@ -261,7 +262,7 @@ function icontent_question_engine_phase2_render_question($objpage, $question, $d
                 $slot = $candidateslot;
                 break;
             }
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             continue;
         }
     }
@@ -270,8 +271,12 @@ function icontent_question_engine_phase2_render_question($objpage, $question, $d
         return false;
     }
 
-    $displayoptions = new question_display_options();
-    $renderedhtml = $quba->render_question($slot, $displayoptions, (string)$displaynumber);
+    try {
+        $displayoptions = new question_display_options();
+        $renderedhtml = $quba->render_question($slot, $displayoptions, (string)$displaynumber);
+    } catch (\Throwable $e) {
+        return false;
+    }
 
     $renderedhtml = icontent_qengine_rewrite_questiontext_pluginfile_urls(
         (string)$renderedhtml,
@@ -1132,6 +1137,12 @@ function icontent_count_attempts_users_with_open_answers($cmid, $status = null, 
              WHERE  qa.cmid = ?
                              AND (
                                         qa.rightanswer IN (?)
+                        OR EXISTS (
+                            SELECT 1
+                                FROM {question} q
+                             WHERE q.id = qa.questionid
+                                 AND q.qtype = ?
+                        )
                                         OR (
                                                 qa.fraction = 0
                                                 AND EXISTS (
@@ -1145,7 +1156,7 @@ function icontent_count_attempts_users_with_open_answers($cmid, $status = null, 
                                                 )
                                         )
                                                          )";
-        $params = [$cmid, $status];
+        $params = [$cmid, $status, ICONTENT_QTYPE_ESSAYAUTOGRADE];
     if (!empty($groupid)) {
             $sql .= "
                              AND EXISTS (
@@ -1339,6 +1350,12 @@ function icontent_get_attempts_users($cmid, $sort, $page = 0, $perpage = ICONTEN
                                              AND cmid = ?
                                              AND (
                                                         qa2.rightanswer IN (?)
+                                                        OR EXISTS (
+                                                                SELECT 1
+                                                                    FROM {question} q
+                                                                 WHERE q.id = qa2.questionid
+                                                                     AND q.qtype = ?
+                                                        )
                                                         OR (
                                                                 qa2.fraction = 0
                                                                 AND EXISTS (
@@ -1361,6 +1378,7 @@ function icontent_get_attempts_users($cmid, $sort, $page = 0, $perpage = ICONTEN
         $cmid,
         $cmid,
         ICONTENT_QTYPE_ESSAY_STATUS_TOEVALUATE,
+        ICONTENT_QTYPE_ESSAYAUTOGRADE,
         $cmid,
     ]; // Field CMID used four times. Check (?).
     if (!empty($groupid)) {
@@ -1435,6 +1453,12 @@ function icontent_get_attempts_users_with_open_answers(
                     AND cmid = ?
                                         AND (
                                                 qa2.rightanswer IN (?)
+                            OR EXISTS (
+                                SELECT 1
+                                    FROM {question} q
+                                 WHERE q.id = qa2.questionid
+                                     AND q.qtype = ?
+                            )
                                                 OR (
                                                         qa2.fraction = 0
                                                         AND EXISTS (
@@ -1454,6 +1478,12 @@ function icontent_get_attempts_users_with_open_answers(
             WHERE qa.cmid = ?
                             AND (
                                         qa.rightanswer IN (?)
+                            OR EXISTS (
+                                SELECT 1
+                                    FROM {question} q
+                                 WHERE q.id = qa.questionid
+                                     AND q.qtype = ?
+                            )
                                         OR (
                                                 qa.fraction = 0
                                                 AND EXISTS (
@@ -1470,8 +1500,10 @@ function icontent_get_attempts_users_with_open_answers(
     $params = [
         $cmid,
         $status,
+        ICONTENT_QTYPE_ESSAYAUTOGRADE,
         $cmid,
         $status,
+        ICONTENT_QTYPE_ESSAYAUTOGRADE,
     ]; // Field CMID used two times. Check (?).
     if (!empty($groupid)) {
         $sql .= "
@@ -1662,6 +1694,7 @@ function icontent_get_questions_and_open_answers_by_user($userid, $cmid, $status
                AND qa.userid = ?
                AND (
                     qa.rightanswer IN (?)
+                    OR q.qtype = ?
                     OR (
                         qa.fraction = 0
                         AND q.qtype = 'poodllrecording'
@@ -1669,7 +1702,7 @@ function icontent_get_questions_and_open_answers_by_user($userid, $cmid, $status
                     )
                );";
     // Get records and return.
-    return $DB->get_records_sql($sql, [$cmid, $userid, $status]);
+    return $DB->get_records_sql($sql, [$cmid, $userid, $status, ICONTENT_QTYPE_ESSAYAUTOGRADE]);
 }
 
 /**

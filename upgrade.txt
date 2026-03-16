@@ -17,13 +17,22 @@ This files describes API changes and other work in the iContent code.
 20240825 iContent_1302 - iContent - Need to update the two functions regarding scale_used
     and Scale_used_anywhere.
 20240827 iContent_1309 - iContent - Need to implement viewaftertimeclose capability.
+20241230 iContent_1346 - iContent - PHPunit tests indicate there are seventeen(17) missing strings.
+20260313 iContent_1440 - iContent - Need to implement running code prechecks before a release.
+
 
 
 === 2.0.5 === pending
+20241008 iContent_1329 - iContent - Investigate creating an iContent Tags block. A tags
+    block is available for each page and is included in backup and restore attempts.
 20260306 iContent_1432 - Due to changes to the, icontent_question_attempts, table need to
     verify backup and restore work correctly.
 20260314 iContent_1441 - Users on the Questions tab can see other user question marked tutor only.
-
+    After code patch, it now works as expected.
+20260316 iContent_1443 - iContent - Edit and Delete glyphs are not shown correctly. Code
+    has been patched and the tools are now visible.
+20260316 iContent_1444 - iContent - Essay (autograde) needs further development to work correctl.
+    
 
 === 2.0.4 === 20260312
 20231223 iContent_1138r - There does not seem to be a way to get to the index.php page.

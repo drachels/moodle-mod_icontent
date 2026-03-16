@@ -28,12 +28,9 @@ defined('MOODLE_INTERNAL') || die(); // @codingStandardsIgnoreLine
  */
 class mod_icontent_renderer extends plugin_renderer_base {
     /**
-     * Renders the iContent page header CSS. {@link http://fontawesome.io}.
-     *
-     * @return string
+     * Renders the iContent page header CSS.
      */
     public function icontent_requires_css() {
-        return $this->page->requires->css('/mod/icontent/styles/font-awesome-4.6.2/css/font-awesome.min.css');
     }
 
     /**

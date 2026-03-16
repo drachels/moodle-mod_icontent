@@ -1388,7 +1388,8 @@ function icontent_phase3_process_qengine_attempts(array $postdata, stdClass $cm,
                 continue;
             }
 
-            $fraction = ($qa->get_fraction() === null) ? 0 : (float)$qa->get_fraction();
+            $qafraction = $qa->get_fraction();
+            $fraction = ($qafraction === null) ? null : (float)$qafraction;
             $rightanswer = (string)$qa->get_right_answer_summary();
             $answertext = (string)$qa->get_response_summary();
 
@@ -1402,7 +1403,7 @@ function icontent_phase3_process_qengine_attempts(array $postdata, stdClass $cm,
                     $answertext = (string)$submittedresponse['answer'];
                 }
 
-                if (method_exists($questiondef, 'grade_response')) {
+                if ($fraction === null && method_exists($questiondef, 'grade_response')) {
                     [$gradedfraction, ] = $questiondef->grade_response($submittedresponse);
                     if ($gradedfraction !== null) {
                         $fraction = (float)$gradedfraction;
@@ -1432,6 +1433,10 @@ function icontent_phase3_process_qengine_attempts(array $postdata, stdClass $cm,
                 if ($answertext === '' && !empty($submittedresponse['answer'])) {
                     $answertext = question_utils::to_plain_text((string)$submittedresponse['answer']);
                 }
+            }
+
+            if ($fraction === null) {
+                $fraction = 0.0;
             }
 
             $records[] = (object) [

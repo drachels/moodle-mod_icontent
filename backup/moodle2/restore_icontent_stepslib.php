@@ -349,6 +349,8 @@ class restore_icontent_activity_structure_step extends restore_questions_activit
 
         $data = (object)$data;
         $oldid = $data->id;
+        $oldresponsefileitemid = !empty($data->responsefileitemid) ? (int)$data->responsefileitemid : 0;
+        unset($data->responsefileitemid);
         $data->pagesquestionsid = $this->get_new_parentid('icontent_page_question');
         if (empty($data->pagesquestionsid)) {
             return;
@@ -378,6 +380,9 @@ class restore_icontent_activity_structure_step extends restore_questions_activit
 
         $newitemid = $DB->insert_record('icontent_question_attempts', $data);
         $this->set_mapping('icontent_question_attempt', $oldid, $newitemid);
+        if (!empty($oldresponsefileitemid)) {
+            $this->set_mapping('icontent_question_attempt_responsefile', $oldresponsefileitemid, $oldresponsefileitemid, true);
+        }
     }
 
     /**
@@ -410,5 +415,6 @@ class restore_icontent_activity_structure_step extends restore_questions_activit
         // Add page related files, matching by itemname = 'icontent_page'.
         $this->add_related_files('mod_icontent', 'page', 'icontent_page');
         $this->add_related_files('mod_icontent', 'bgpage', 'icontent_page');
+        $this->add_related_files('question', 'response_answer', 'icontent_question_attempt_responsefile');
     }
 }

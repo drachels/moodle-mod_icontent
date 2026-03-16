@@ -105,7 +105,10 @@ if ($qopenanswers) {
         $commentfieldname = 'questioncomment[attemptid-' . $qopenanswer->id . ']';
         $commentformatname = 'questioncommentformat[attemptid-' . $qopenanswer->id . ']';
         $commentfieldid = 'idcomment-' . $qopenanswer->id;
-        $fraction = ($status === ICONTENT_QTYPE_ESSAY_STATUS_VALUED) ? $qopenanswer->fraction : ''; // Check status.
+        $fraction = (
+            $status === ICONTENT_QTYPE_ESSAY_STATUS_VALUED
+            || (string)$qopenanswer->qtype === ICONTENT_QTYPE_ESSAYAUTOGRADE
+        ) ? $qopenanswer->fraction : ''; // Check status.
         $reviewercomment = (string)($qopenanswer->reviewercomment ?? '');
         $reviewercommentformat = (int)($qopenanswer->reviewercommentformat ?? $preferredformat);
         // Get page.

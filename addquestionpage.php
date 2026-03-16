@@ -76,8 +76,6 @@ $PAGE->set_url('/mod/icontent/addquestionpage.php', ['id' => $cm->id, 'pageid' =
 $PAGE->set_title(format_string($icontent->name) . ' - ' . format_string($currentpage->title));
 $PAGE->set_heading(format_string($course->fullname));
 $PAGE->add_body_class('icontent-addquestionpage');
-// CSS.
-$PAGE->requires->css(new moodle_url($CFG->wwwroot . '/mod/icontent/styles/font-awesome-4.6.2/css/font-awesome.min.css'));
 $hascommentplugin = \core\plugininfo\qbank::is_plugin_enabled('qbank_comment');
 if ($hascommentplugin && !empty($CFG->usecomments)) {
     $PAGE->requires->js_call_amd('qbank_comment/comment', 'init');
