@@ -68,6 +68,18 @@ require_login($course, true, $cm);
 $context = context_module::instance($cm->id);
 $coursecontext = $context->get_course_context(true)->id;
 require_capability('mod/icontent:newquestion', $context);
+
+// Process POST before any page output so redirect() fires in STATE_BEFORE_HEADER.
+if ($action) {
+    // Receives values.
+    $questions = optional_param_array('question', [], PARAM_RAW);
+    // Save values.
+    if (icontent_add_questionpage($questions, $pageid, $cm->id)) {
+        $urlredirect = new moodle_url('/mod/icontent/view.php', ['id' => $cm->id, 'pageid' => $pageid]);
+        redirect($urlredirect, get_string('msgaddquestionpage', 'mod_icontent'));
+    }
+}
+
 // Log event.
 \mod_icontent\event\question_page_viewed::create_from_question_page($icontent, $context, $pageid)->trigger();
 
@@ -90,16 +102,6 @@ $url = new moodle_url(
         'perpage' => $perpage,
     ]
 );
-
-if ($action) {
-    // Receives values.
-    $questions = optional_param_array('question', [], PARAM_RAW);
-    // Save values.
-    if (icontent_add_questionpage($questions, $pageid, $cm->id)) {
-        $urlredirect = new moodle_url('/mod/icontent/view.php', ['id' => $cm->id, 'pageid' => $pageid]);
-        redirect($urlredirect, get_string('msgaddquestionpage', 'mod_icontent'));
-    }
-}
 
 // Output starts here.
 echo $OUTPUT->header();
@@ -388,7 +390,6 @@ if ($hasquestions) {
     echo html_writer::div(get_string('emptyquestionbank', 'mod_icontent'), 'alert alert-warning');
 }
 // Show elements HTML.
-echo html_writer::div(get_string('infomaxquestionperpage', 'mod_icontent'), 'alert alert-info');
 echo $answerscurrentpage ? html_writer::div(get_string('msgstatusdisplay', 'mod_icontent'), 'alert alert-warning') : null;
 echo html_writer::start_tag(
     'form',

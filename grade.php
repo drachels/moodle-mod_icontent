@@ -75,7 +75,10 @@ $sort = icontent_check_value_sort($sort);
 // Get users attempts.
 $attemptsusers = icontent_get_attempts_users($cm->id, $sort, $page, $perpage, $group);
 $tattemtpsusers = icontent_count_attempts_users($cm->id, $group);
-$tquestinstance = icontent_get_totalquestions_by_instance($cm->id);
+$tquestinstance = icontent_get_totalmaxfraction_by_instance($cm->id);
+if ($tquestinstance <= 0) {
+    $tquestinstance = (float)icontent_get_totalquestions_by_instance($cm->id);
+}
 // Make table questions.
 $table = new html_table();
 $table->id = "idtableattemptsusers";
@@ -112,12 +115,16 @@ if ($attemptsusers) {
             $attemptuser->totalopenanswers
         ) : '';
         // String evaluate.
+        $attemptmaxfraction = (float)($attemptuser->maxfraction ?? 0);
+        if ($attemptmaxfraction <= 0) {
+            $attemptmaxfraction = (float)$attemptuser->totalanswers;
+        }
         $evaluate = new stdClass();
         $evaluate->fraction = number_format($attemptuser->sumfraction, 2);
-        $evaluate->maxfraction = number_format($attemptuser->totalanswers, 2);
-        $evaluate->percentage = round(($attemptuser->sumfraction * 100) / $attemptuser->totalanswers);
+        $evaluate->maxfraction = number_format($attemptmaxfraction, 2);
+        $evaluate->percentage = $attemptmaxfraction > 0 ? round(($attemptuser->sumfraction * 100) / $attemptmaxfraction) : 0;
         $evaluate->openanswer = $stropenanswer;
-        $evaluate->finalgrade = ($attemptuser->sumfraction * $icontent->grade) / $tquestinstance;
+        $evaluate->finalgrade = $tquestinstance > 0 ? ($attemptuser->sumfraction * $icontent->grade) / $tquestinstance : 0;
         $strevaluate = get_string('strtoevaluate', 'mod_icontent', $evaluate);
         // Set data.
         $table->data[] = [

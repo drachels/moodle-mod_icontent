@@ -1,38 +1,113 @@
 This files describes API changes and other work in the iContent code.
 
 === Deferred until fixed. ===
-20240101 iContent_1155 - Might want to see about adding an iContent plugin to Grade Me.
-20240104 iContent_1156 - I am getting, You should really redirect before you start page
-    output, when adding questions to a slide.
- iContent_1189 - Feature request - Please consider using templates as an alternative
-    to the HTML writer.
+20240101 iContent_1155w - Might want to see about adding an iContent plugin to Grade Me.
+    2026031701 - iContent_1155: Fixed but waiting - Grade Me subplugin recreated at
+    blocks/grade_me/plugins/icontent/icontent_plugin.php after upstream Grade Me upgrade
+    wiped it. Shows only essay attempts with rightanswer='toevaluate' (pending manual
+    grading). essayautograde excluded (auto-graded, no teacher action needed). Fixed
+    GROUP BY/suffix bug that caused icontent items to bleed across all courses. Admin
+    attempts may appear if admin is also enrolled as a student in that course (normal
+    Grade Me behaviour, not a plugin defect).
+20240111 iContent_1167 - iContent - Capability "mod/icontent:rate" was not found! This has to be fixed in code.
 20240205 iContent_1191 - The extend navigation function is empty.
 20240205 iContent_1195 - Feature request to send notes/questions to the teacher.
+20240616 iContent_1253 - Request in discussion for doubts/question to be emailed to the teacher.
+20240616 iContent_1254 - Navigation clicks to open/close block areas does not work reliably.
+20240706 iContent_1260 - Need to change all occurences of, // @codingStandardsIgnoreLine, over to, // phpcs:ignore.
+20240710 iContent_1262 - Would be nice to enable the correction capability that has recently been discussed in the forum.
 20240718 iContent_1273 - Notificactions on Notes and Questions #37.
+20240729 iContent_1290 - The styles.css file needs some attention re: newline/paragraph does not render in notes/doubts text area.
+20240729 iContent_1291 - The styles.css file needs some attention re: text starts below where it should for the content page text area.
+20240805 iContent_1292 - Would be nice to limit proceeding to new slide/page based on question completion on current slide/page.
+20240805 iContent_1293 - Would be nice if Previous/Next buttons were like those in a Book resource.
+20240823 iContent_1296 - Would be nice if there were some sort of report available to the teacher regarding question details.
 
 20240824 iContent_1297 - Need to implement icontent_print_recent_activity function in lib.php.
 20240824 iContent_1298 - Need to implement, icontent_reset_userdata in lib.php.
 20240824 iContent_1299 - need to implement, function reset_instance
 20240825 iContent_1301 - Need to implement, function icontent_reset_course_form_definition($mform).
-20240825 iContent_1302 - iContent - Need to update the two functions regarding scale_used
+20240825 iContent_1302 - Need to update the two functions regarding scale_used
     and Scale_used_anywhere.
-20240827 iContent_1309 - iContent - Need to implement viewaftertimeclose capability.
-20241230 iContent_1346 - iContent - PHPunit tests indicate there are seventeen(17) missing strings.
-20260313 iContent_1440 - iContent - Need to implement running code prechecks before a release.
-
+20240827 iContent_1305 - Exception occurred while calling mod_icontent\privacy\provider::get_contexts_for_userid.
+20240827 iContent_1309 - Need to implement viewaftertimeclose capability.
+20240903 iContent_1314 - Would be nice to be able to change a page title's color for use with background images.
+20240915 iContent_1319 - The Delete tool button Icon is missing in the Content pages menu.
+20260313 iContent_1440 - Need to implement running code prechecks before a release.
 
 
 === 2.0.5 === pending
-20241008 iContent_1329 - iContent - Investigate creating an iContent Tags block. A tags
+20240111 iContent_1189 - Feature request - Please consider using mustache templates as an alternative
+    to the HTML writer.
+    2026031703 - iContent_1189: Being tested - First Mustache migration implemented
+    by converting the manual-review question card output in toevaluate.php from
+    html_writer composition to mod/icontent/templates/manual_review_question_card.mustache
+    rendered via $OUTPUT->render_from_template().
+    2026031704 - iContent_1189: Follow-up fix - Student Result summary no longer
+    shows static "To evaluate" after manual grading. Restored strtoevaluate and
+    stropenanswer language strings in lang/en/icontent.php after duplicate-string
+    overrides had replaced them with non-parameterized values.
+    2026031705 - iContent_1189: Follow-up fix - Weighted marks now respected.
+    Attempt fractions are stored/scored against each question max mark (using
+    icontent_pages_questions.maxmark with question.defaultmark fallback),
+    manual-review grade input supports per-question maximums (not hard-coded 1),
+    and result summaries/percentages now display true "out of X" values.
+20240104 iContent_1156bt - I am getting, You should really redirect before you start page
+    output, when adding questions to a slide.
+    2026031702 - iContent_1156: Being tested - Moved the if ($action) POST-processing block in
+    addquestionpage.php to before the question_page_viewed event trigger and $PAGE setup
+    calls. redirect() now fires while the page is still in STATE_BEFORE_HEADER, eliminating
+    the "You should really redirect before you start page output" debug warning.
+20231231 iContent_1150bt - iContent - Current code does not respect 3 question limit when adding
+    questions.
+    2026031701 - iContent_1150: Removed misleading add-question limit message; the UI no longer
+    implies a 3-question cap, and infomaxquestionperpage was deprecated.
+20231231 iContent_1152bt - iContent - The list of questions report is missing.
+    2026031701 - iContent_1152: Being tested - Verified More > Questions listings work for
+    Questions to tutor and All questions (legacy doubts.php path), and More > Results listings
+    are available via Grades and Manual review pages.
+20231231 iContent_1153bt - iContent - Cannot see questions to add until at least one is created
+    in the course.
+    2026031701 - iContent_1153: Being tested - Verified addquestionpage loads question-bank
+    categories/questions directly and shows emptyquestionbank only when the course bank is empty.
+20231231 iContent_1154bt - iContent - Current v1.0.6.1 and 1.0.7.0 code shows ALL question in
+    the site instead of current course.
+    2026031701 - iContent_1154: Being tested - Verified addquestionpage is course-scoped via
+    course question-bank contexts/categories, and listings are filtered to the selected category.
+20241008 iContent_1329bt - iContent - Investigate creating an iContent Tags block. A tags
     block is available for each page and is included in backup and restore attempts.
-20260306 iContent_1432 - Due to changes to the, icontent_question_attempts, table need to
+20241230 iContent_1346bt - iContent - PHPunit tests indicate there are seventeen(17) missing strings.
+    Generated language strings based on code analysis of missing string references
+    and event/privacy metadata definitions in question toevaluate, note handling,
+    and question Engine Phase 1 event/event infrastructure.
+    2026031702 - iContent_1346: Resolved - Due to code fixes and additions, 101
+    new language string keys were identified via code grep/community-used get_string calls and populated
+    in lang/en/icontent.php with descriptive text for events, UI labels, and
+    privacy metadata. Language string coverage is now complete for current codebase.
+20260306 iContent_1432bt - Due to changes to the, icontent_question_attempts, table need to
     verify backup and restore work correctly.
-20260314 iContent_1441 - Users on the Questions tab can see other user question marked tutor only.
+    2026031701 - iContent_1432: Being tested - Backup on moodledev and restore to moodle501
+    verified working; previously restore was missing tags and some grades.
+20260314 iContent_1441bt - Users on the Questions tab can see other user question marked tutor only.
     After code patch, it now works as expected.
-20260316 iContent_1443 - iContent - Edit and Delete glyphs are not shown correctly. Code
+20260316 iContent_1443bt - iContent - Edit and Delete glyphs are not shown correctly. Code
     has been patched and the tools are now visible.
-20260316 iContent_1444 - iContent - Essay (autograde) needs further development to work correctl.
-    
+20260316 iContent_1444bt - iContent - Essay (autograde) needs further development to work correctly.
+    Patched iContent and created patch for the question type to create issue on github.
+    2026031601 - iContent_1444: Fixed live word count in iContent editor and in
+    qtype_essayautograde AMD (Tiny editor binding/readiness hardening).
+    2026031701 - iContent_1444: Being tested - Grading confirmed correct; prior low scores
+    were due to phrase award % set too low in question config, not an iContent or qtype bug.
+20260316 iContent_1445 - Feature request - Previous/Next buttons should be hidden if only one page
+    is in the activity. 2026031701 - iContent_1445: Hid top and bottom Previous/Next navigation bars when
+    the activity has only one page.
+20260317 iContent_1446bt - Feature request - Make iContent respect the Default points setting for questions.
+    2026031706 - iContent_1446: Follow-up fix - Right answers now counts manually
+    reviewed responses as answered once valued, while objective question types
+    continue counting as right only at full-credit threshold.
+    2026031707 - iContent_1446: Follow-up fix - Right answers now shows an
+    equivalent-correct fractional metric for multi-input attempts (e.g. X.XX / N)
+    while keeping single-input attempts as 0/1 style values.
 
 === 2.0.4 === 20260312
 20231223 iContent_1138r - There does not seem to be a way to get to the index.php page.

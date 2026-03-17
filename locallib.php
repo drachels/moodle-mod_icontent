@@ -1027,8 +1027,11 @@ function icontent_set_grade_item(stdClass $icontent, $cmid, $userid) {
         'idnumber' => $cmid,
     ];
     $sumfraction = icontent_get_sumfraction_by_userid($cmid, $userid);
-    $tquestinstance = icontent_get_totalquestions_by_instance($cmid);
-    $finalgrade = ($sumfraction * $icontent->grade) / $tquestinstance;
+    $totalmaxfraction = icontent_get_totalmaxfraction_by_instance($cmid);
+    if ($totalmaxfraction <= 0) {
+        $totalmaxfraction = (float) icontent_get_totalquestions_by_instance($cmid);
+    }
+    $finalgrade = $totalmaxfraction > 0 ? ($sumfraction * $icontent->grade) / $totalmaxfraction : 0;
     // Make set icontent_grade for <iContent>.
     $igrade = new stdClass();
     $igrade->icontentid = $icontent->id;
@@ -1340,6 +1343,14 @@ function icontent_get_attempts_users($cmid, $sort, $page = 0, $perpage = ICONTEN
                                             FROM {icontent_question_attempts}
                                          WHERE userid = u.id
                                              AND cmid = ?) AS sumfraction,
+                         (SELECT Sum(COALESCE(NULLIF(pq2.maxmark, 0), q2.defaultmark, 1))
+                            FROM {icontent_question_attempts} qa2
+                          INNER JOIN {icontent_pages_questions} pq2
+                              ON qa2.pagesquestionsid = pq2.id
+                          INNER JOIN {question} q2
+                              ON qa2.questionid = q2.id
+                           WHERE qa2.userid = u.id
+                             AND qa2.cmid = ?) AS maxfraction,
                                      (SELECT Count(id)
                                             FROM {icontent_question_attempts}
                                          WHERE userid = u.id
@@ -1374,6 +1385,7 @@ function icontent_get_attempts_users($cmid, $sort, $page = 0, $perpage = ICONTEN
                                 ON u.id = qa.userid
                          WHERE qa.cmid = ?";
     $params = [
+        $cmid,
         $cmid,
         $cmid,
         $cmid,
@@ -1537,12 +1549,15 @@ function icontent_get_attempt_summary_by_page($pageid, $cmid) {
         return false;
     }
 
-    $sql = "SELECT Sum(qa.fraction) AS sumfraction,
+        $sql = "SELECT Sum(qa.fraction) AS sumfraction,
+               Sum(COALESCE(NULLIF(pq.maxmark, 0), q.defaultmark, 1)) AS maxfraction,
                    Count(qa.id) AS totalanswers,
                    qa.timecreated
               FROM {icontent_question_attempts} qa
         INNER JOIN {icontent_pages_questions} pq
                 ON qa.pagesquestionsid = pq.id
+        INNER JOIN {question} q
+            ON qa.questionid = q.id
              WHERE pq.pageid = ?
                AND pq.cmid = ?
                AND qa.userid = ?
@@ -1572,16 +1587,40 @@ function icontent_get_right_answers_by_attempt_summary_by_page($pageid, $cmid) {
         return (object)['totalrightanswers' => 0];
     }
 
-    $sql = "SELECT Count(qa.id) AS totalrightanswers
+        $sql = "SELECT Sum(CASE
+                               WHEN qa.rightanswer = ? THEN 1
+                               WHEN qa.fraction >= COALESCE(NULLIF(pq.maxmark, 0), q.defaultmark, 1) THEN 1
+                               ELSE 0
+                           END) AS totalrightanswers,
+                           Sum(CASE
+                               WHEN qa.rightanswer = ? THEN 1
+                               WHEN qa.rightanswer = ? THEN 0
+                               ELSE GREATEST(
+                                   LEAST(
+                                       qa.fraction / COALESCE(NULLIF(pq.maxmark, 0), q.defaultmark, 1),
+                                       1
+                                   ),
+                                   0
+                               )
+                           END) AS equivalentrightanswers
               FROM {icontent_question_attempts} qa
         INNER JOIN {icontent_pages_questions} pq
                 ON qa.pagesquestionsid = pq.id
-             WHERE qa.fraction > 0
-               AND pq.pageid = ?
+        INNER JOIN {question} q
+            ON qa.questionid = q.id
+                                 WHERE pq.pageid = ?
                AND pq.cmid = ?
                AND qa.userid = ?
                AND qa.timecreated = ?";
-    return $DB->get_record_sql($sql, [$pageid, $cmid, $USER->id, $latestattempttime]);
+    return $DB->get_record_sql($sql, [
+        ICONTENT_QTYPE_ESSAY_STATUS_VALUED,
+        ICONTENT_QTYPE_ESSAY_STATUS_VALUED,
+        ICONTENT_QTYPE_ESSAY_STATUS_TOEVALUATE,
+        $pageid,
+        $cmid,
+        $USER->id,
+        $latestattempttime,
+    ]);
 }
 
 /**
@@ -1680,8 +1719,10 @@ function icontent_get_questions_and_open_answers_by_user($userid, $cmid, $status
                    qa.fraction,
                    qa.timecreated,
                    q.questiontext,
-               q.qtype,
-               qpo.responseformat,
+                   q.qtype,
+                   qpo.responseformat,
+                   pq.maxmark,
+                   q.defaultmark,
                    pq.pageid
               FROM {icontent_question_attempts} qa
         INNER JOIN {question} q
@@ -2067,6 +2108,8 @@ function icontent_add_questionpage($questions, $pageid, $cmid) {
         return false;
     }
 
+    $questionmarks = $DB->get_records_list('question', 'id', $selectedquestionids, '', 'id, defaultmark');
+
     $existing = $DB->get_records_menu(
         'icontent_pages_questions',
         ['pageid' => $pageid, 'cmid' => $cmid],
@@ -2086,6 +2129,8 @@ function icontent_add_questionpage($questions, $pageid, $cmid) {
         $record->pageid = $pageid;
         $record->questionid = $questionid;
         $record->cmid = $cmid;
+        $defaultmark = isset($questionmarks[$questionid]) ? (float)$questionmarks[$questionid]->defaultmark : 0.0;
+        $record->maxmark = $defaultmark > 0 ? $defaultmark : 1;
         $record->timecreated = $timecreated;
         $records[] = $record;
     }
@@ -2134,6 +2179,8 @@ function icontent_get_pagequestions($pageid, $cmid) {
     $sql = 'SELECT pq.id AS qpid,
                    q.id  AS qid,
                    q.name,
+                   pq.maxmark,
+                   q.defaultmark,
                    q.questiontext,
                    q.questiontextformat,
                    q.qtype
@@ -2171,6 +2218,29 @@ function icontent_get_totalquestions_by_instance($cmid) {
                AND pq.cmid = ?;';
     $tsub = $DB->count_records_sql($sql, [ICONTENT_QTYPE_MATCH, $cmid]);
     return $tsub + $tquest;
+}
+
+/**
+ * Get total maximum points by instance <iContent>.
+ *
+ * @param int $cmid
+ * @return float
+ */
+function icontent_get_totalmaxfraction_by_instance($cmid) {
+    global $DB;
+
+    $sql = "SELECT Sum(COALESCE(NULLIF(pq.maxmark, 0), q.defaultmark, 1))
+              FROM {icontent_pages_questions} pq
+        INNER JOIN {question} q
+                ON pq.questionid = q.id
+             WHERE pq.cmid = ?";
+
+    $maxfraction = $DB->get_field_sql($sql, [$cmid]);
+    if ($maxfraction === false || $maxfraction === null) {
+        return 0.0;
+    }
+
+    return (float)$maxfraction;
 }
 
 /**
@@ -3172,21 +3242,35 @@ function icontent_make_attempt_summary_by_page($pageid, $cmid) {
     ];
     $state = get_string('strstate', 'mod_icontent', userdate($summaryattempt->timecreated));
     $totalanswers = $summaryattempt->totalanswers;
-    $totalrightanswers = $rightanswer->totalrightanswers;
+    $totalrightanswers = (float)($rightanswer->totalrightanswers ?? 0);
+    $equivalentrightanswers = (float)($rightanswer->equivalentrightanswers ?? 0);
+    $rightanswersdisplay = (string)(int)$totalrightanswers;
     $stropenanswer = $openanswer->totalopenanswers ?
         get_string('stropenanswer', 'mod_icontent', $openanswer->totalopenanswers) : '';
-    if (!empty($openanswer->totalopenanswers) && (int)$totalrightanswers === 0) {
-        $totalrightanswers = get_string('pendingreview', 'mod_icontent');
+    if (!empty($openanswer->totalopenanswers) && $equivalentrightanswers <= 0 && $totalrightanswers <= 0) {
+        $rightanswersdisplay = get_string('pendingreview', 'mod_icontent');
+    } else if ((int)$totalanswers > 1) {
+        if ($equivalentrightanswers < 0) {
+            $equivalentrightanswers = 0;
+        }
+        if ($equivalentrightanswers > (float)$totalanswers) {
+            $equivalentrightanswers = (float)$totalanswers;
+        }
+        $rightanswersdisplay = number_format($equivalentrightanswers, 2) . ' / ' . (int)$totalanswers;
     }
     // String.
     $evaluate = new stdClass();
+    $maxfraction = (float)($summaryattempt->maxfraction ?? 0);
+    if ($maxfraction <= 0) {
+        $maxfraction = (float)$summaryattempt->totalanswers;
+    }
     $evaluate->fraction = number_format($summaryattempt->sumfraction, 2);
-    $evaluate->maxfraction = number_format($summaryattempt->totalanswers, 2);
-    $evaluate->percentage = round(($summaryattempt->sumfraction * 100) / $summaryattempt->totalanswers);
+    $evaluate->maxfraction = number_format($maxfraction, 2);
+    $evaluate->percentage = $maxfraction > 0 ? round(($summaryattempt->sumfraction * 100) / $maxfraction) : 0;
     $evaluate->openanswer = $stropenanswer;
     $strevaluate = get_string('strtoevaluate', 'mod_icontent', $evaluate);
     // Set data.
-    $summarygrid->data[] = [$state, $totalanswers, $totalrightanswers, $strevaluate, $iconrepeatattempt];
+    $summarygrid->data[] = [$state, $totalanswers, $rightanswersdisplay, $strevaluate, $iconrepeatattempt];
 
     // Create table summary attempt.
     $tablesummary = html_writer::table($summarygrid);

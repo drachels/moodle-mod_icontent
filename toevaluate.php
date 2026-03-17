@@ -56,9 +56,43 @@ if ($action) {
     $i = 0;
     $update = false;
     if ($questions) {
+        $attemptids = [];
+        foreach (array_keys($questions) as $qname) {
+            [$strname, $answerid] = explode('-', $qname);
+            $attemptids[] = (int)$answerid;
+        }
+
+        $maxgradesbyattempt = [];
+        if (!empty($attemptids)) {
+            [$insql, $inparams] = $DB->get_in_or_equal($attemptids, SQL_PARAMS_NAMED);
+            $sql = "SELECT qa.id,
+                           pq.maxmark,
+                           q.defaultmark
+                      FROM {icontent_question_attempts} qa
+                INNER JOIN {icontent_pages_questions} pq
+                        ON qa.pagesquestionsid = pq.id
+                INNER JOIN {question} q
+                        ON qa.questionid = q.id
+                     WHERE qa.id $insql
+                       AND qa.userid = :userid
+                       AND qa.cmid = :cmid";
+            $params = $inparams + ['userid' => $user->id, 'cmid' => $cm->id];
+            $records = $DB->get_records_sql($sql, $params);
+            foreach ($records as $record) {
+                $maxmark = (float)$record->maxmark;
+                if ($maxmark <= 0) {
+                    $maxmark = (float)$record->defaultmark;
+                }
+                $maxgradesbyattempt[(int)$record->id] = $maxmark > 0 ? $maxmark : 1.0;
+            }
+        }
+
         foreach ($questions as $qname => $qvalue) {
             [$strname, $answerid] = explode('-', $qname);
-            $qvalue = $qvalue > 1 ? 1 : $qvalue;
+            $answerid = (int)$answerid;
+            $maxgrade = $maxgradesbyattempt[$answerid] ?? 1.0;
+            $qvalue = (float)str_replace(',', '.', (string)$qvalue);
+            $qvalue = max(0.0, min($qvalue, $maxgrade));
             $commentkey = 'attemptid-' . $answerid;
             $attempt = new stdClass();
             $attempt->id = $answerid;
@@ -105,74 +139,50 @@ if ($qopenanswers) {
         $commentfieldname = 'questioncomment[attemptid-' . $qopenanswer->id . ']';
         $commentformatname = 'questioncommentformat[attemptid-' . $qopenanswer->id . ']';
         $commentfieldid = 'idcomment-' . $qopenanswer->id;
+        $questionblockid = 'idq' . $qopenanswer->questionid;
         $fraction = (
             $status === ICONTENT_QTYPE_ESSAY_STATUS_VALUED
             || (string)$qopenanswer->qtype === ICONTENT_QTYPE_ESSAYAUTOGRADE
         ) ? $qopenanswer->fraction : ''; // Check status.
         $reviewercomment = (string)($qopenanswer->reviewercomment ?? '');
         $reviewercommentformat = (int)($qopenanswer->reviewercommentformat ?? $preferredformat);
+        $maxgrade = (float)($qopenanswer->maxmark ?? 0);
+        if ($maxgrade <= 0) {
+            $maxgrade = (float)($qopenanswer->defaultmark ?? 0);
+        }
+        if ($maxgrade <= 0) {
+            $maxgrade = 1.0;
+        }
         // Get page.
         $page = $DB->get_record('icontent_pages', ['id' => $qopenanswer->pageid], 'id, title, pagenum', MUST_EXIST);
-        $attempttitle = html_writer::tag('strong', get_string('strattempttitle', 'mod_icontent', $page));
-        $qtext = html_writer::div($qopenanswer->questiontext, 'qtext');
         $qanswercontent = icontent_render_manual_review_answer($qopenanswer, (int)$cm->id);
-        $qanswer = html_writer::div($qanswercontent, 'answer qtype_essay_editor qtype_essay_response readonly');
-        $commentlabel = html_writer::label(
-            get_string('comments', 'mod_icontent'),
-            $commentfieldid,
-            false,
-            ['class' => 'labelfieldcomment']
-        );
-        $commentfield = html_writer::tag('textarea', s($reviewercomment), [
-            'id' => $commentfieldid,
-            'name' => $commentfieldname,
-            'rows' => 6,
-            'class' => 'form-control',
-        ]);
-        $commentformatfield = html_writer::empty_tag('input', [
-            'type' => 'hidden',
-            'name' => $commentformatname,
-            'value' => $reviewercommentformat,
-        ]);
         if ($preferrededitor) {
             $preferrededitor->use_editor($commentfieldid, [
                 'context' => $context,
                 'autosave' => false,
             ]);
         }
-        $commentblock = html_writer::div($commentlabel . $commentfield . $commentformatfield, 'cblock mt-2');
-        $ablock = html_writer::div($qanswer, 'ablock');
-        $skipline = html_writer::empty_tag('br');
-        $labelgrade = html_writer::label(
-            get_string('gradenoun', 'icontent') . $skipline,
-            $fieldid,
-            null,
-            ['class' => 'labelfieldgrade']
-        );
-        $fieldfraction = html_writer::empty_tag(
-            'input',
-            [
-                'type' => 'number',
-                'class' => 'input-mini',
-                'value' => $fraction,
-                'id' => $fieldid,
-                'name' => $fieldname,
-                'required' => 'required',
-                'step' => '0.1',
-                'min' => '0',
-                'max' => '1',
-            ]
-        );
-        $labelmaxgrade = html_writer::label(get_string('strmaxgrade', 'mod_icontent'), null);
-        $divgrade = html_writer::div($labelgrade . $fieldfraction . $labelmaxgrade, 'gblock');
-          $content = html_writer::div($qtext . $ablock . $commentblock . $divgrade, 'formulation');
-        echo html_writer::div(
-            $attempttitle . $content,
-            'que manualgraded ' . ICONTENT_QTYPE_ESSAY,
-            [
-               'id' => 'idq' . $qopenanswer->questionid,
-            ]
-        );
+        $templatecontext = [
+            'questionblockid' => $questionblockid,
+            'questionblockclass' => 'que manualgraded ' . ICONTENT_QTYPE_ESSAY,
+            'attempttitle' => get_string('strattempttitle', 'mod_icontent', $page),
+            'questiontexthtml' => $qopenanswer->questiontext,
+            'answerhtml' => $qanswercontent,
+            'commentlabel' => get_string('comments', 'mod_icontent'),
+            'commentfieldid' => $commentfieldid,
+            'commentfieldname' => $commentfieldname,
+            'reviewercomment' => $reviewercomment,
+            'commentformatname' => $commentformatname,
+            'reviewercommentformat' => $reviewercommentformat,
+            'gradenoun' => get_string('gradenoun', 'icontent'),
+            'fieldid' => $fieldid,
+            'fieldname' => $fieldname,
+            'fraction' => $fraction,
+            'maxgrade' => $maxgrade,
+            'maxgradeformatted' => number_format($maxgrade, 2),
+            'strmaxgrade' => get_string('strmaxgrade', 'mod_icontent'),
+        ];
+        echo $OUTPUT->render_from_template('mod_icontent/manual_review_question_card', $templatecontext);
     }
 } else {
     redirect(

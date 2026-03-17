@@ -1388,6 +1388,14 @@ function icontent_phase3_process_qengine_attempts(array $postdata, stdClass $cm,
                 continue;
             }
 
+            $effectivemaxmark = (float)($pagequestion->maxmark ?? 0);
+            if ($effectivemaxmark <= 0) {
+                $effectivemaxmark = (float)($pagequestion->defaultmark ?? 0);
+            }
+            if ($effectivemaxmark <= 0) {
+                $effectivemaxmark = 1.0;
+            }
+
             $qafraction = $qa->get_fraction();
             $fraction = ($qafraction === null) ? null : (float)$qafraction;
             $rightanswer = (string)$qa->get_right_answer_summary();
@@ -1437,6 +1445,8 @@ function icontent_phase3_process_qengine_attempts(array $postdata, stdClass $cm,
 
             if ($fraction === null) {
                 $fraction = 0.0;
+            } else {
+                $fraction = $fraction * $effectivemaxmark;
             }
 
             $records[] = (object) [
@@ -1482,6 +1492,31 @@ function icontent_ajax_saveattempt($formdata, stdClass $cm, $icontent) {
     unset($data['id']);
     unset($data['pageid']);
     unset($data['sesskey']);
+
+    $pagequestionrecords = $DB->get_records(
+        'icontent_pages_questions',
+        ['pageid' => $pageid, 'cmid' => $cm->id],
+        '',
+        'id, questionid, maxmark'
+    );
+    $questionids = [];
+    foreach ($pagequestionrecords as $pagequestionrecord) {
+        $questionids[] = (int)$pagequestionrecord->questionid;
+    }
+    $questiondefaults = [];
+    if (!empty($questionids)) {
+        $questiondefaults = $DB->get_records_list('question', 'id', array_unique($questionids), '', 'id, defaultmark');
+    }
+
+    $maxmarksbyqpid = [];
+    foreach ($pagequestionrecords as $pagequestionrecord) {
+        $maxmark = (float)$pagequestionrecord->maxmark;
+        if ($maxmark <= 0 && isset($questiondefaults[$pagequestionrecord->questionid])) {
+            $maxmark = (float)$questiondefaults[$pagequestionrecord->questionid]->defaultmark;
+        }
+        $maxmarksbyqpid[(int)$pagequestionrecord->id] = $maxmark > 0 ? $maxmark : 1.0;
+    }
+
     // Create array object for attempt.
     $i = 0;
     $records = [];
@@ -1503,7 +1538,7 @@ function icontent_ajax_saveattempt($formdata, stdClass $cm, $icontent) {
         $records[$i]->questionid = (int) $qid;
         $records[$i]->userid = (int) $USER->id;
         $records[$i]->cmid = (int) $cm->id;
-        $records[$i]->fraction = $infoanswer->fraction;
+        $records[$i]->fraction = $infoanswer->fraction * ($maxmarksbyqpid[(int)$qpid] ?? 1.0);
         $records[$i]->rightanswer = $infoanswer->rightanswer;
         $records[$i]->answertext = $infoanswer->answertext;
         $records[$i]->timecreated = time();
