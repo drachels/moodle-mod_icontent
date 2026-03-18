@@ -15,7 +15,6 @@ This files describes API changes and other work in the iContent code.
 20240616 iContent_1253 - Request in discussion for doubts/question to be emailed to the teacher.
 20240616 iContent_1254 - Navigation clicks to open/close block areas does not work reliably.
 20240706 iContent_1260 - Need to change all occurences of, // @codingStandardsIgnoreLine, over to, // phpcs:ignore.
-20240710 iContent_1262 - Would be nice to enable the correction capability that has recently been discussed in the forum.
 20240718 iContent_1273 - Notificactions on Notes and Questions #37.
 20240729 iContent_1290 - The styles.css file needs some attention re: newline/paragraph does not render in notes/doubts text area.
 20240729 iContent_1291 - The styles.css file needs some attention re: text starts below where it should for the content page text area.
@@ -31,33 +30,11 @@ This files describes API changes and other work in the iContent code.
     and Scale_used_anywhere.
 20240827 iContent_1305 - Exception occurred while calling mod_icontent\privacy\provider::get_contexts_for_userid.
 20240827 iContent_1309 - Need to implement viewaftertimeclose capability.
-20240903 iContent_1314 - Would be nice to be able to change a page title's color for use with background images.
 20240915 iContent_1319 - The Delete tool button Icon is missing in the Content pages menu.
 20260313 iContent_1440 - Need to implement running code prechecks before a release.
 
 
 === 2.0.5 === pending
-20240111 iContent_1189 - Feature request - Please consider using mustache templates as an alternative
-    to the HTML writer.
-    2026031703 - iContent_1189: Being tested - First Mustache migration implemented
-    by converting the manual-review question card output in toevaluate.php from
-    html_writer composition to mod/icontent/templates/manual_review_question_card.mustache
-    rendered via $OUTPUT->render_from_template().
-    2026031704 - iContent_1189: Follow-up fix - Student Result summary no longer
-    shows static "To evaluate" after manual grading. Restored strtoevaluate and
-    stropenanswer language strings in lang/en/icontent.php after duplicate-string
-    overrides had replaced them with non-parameterized values.
-    2026031705 - iContent_1189: Follow-up fix - Weighted marks now respected.
-    Attempt fractions are stored/scored against each question max mark (using
-    icontent_pages_questions.maxmark with question.defaultmark fallback),
-    manual-review grade input supports per-question maximums (not hard-coded 1),
-    and result summaries/percentages now display true "out of X" values.
-20240104 iContent_1156bt - I am getting, You should really redirect before you start page
-    output, when adding questions to a slide.
-    2026031702 - iContent_1156: Being tested - Moved the if ($action) POST-processing block in
-    addquestionpage.php to before the question_page_viewed event trigger and $PAGE setup
-    calls. redirect() now fires while the page is still in STATE_BEFORE_HEADER, eliminating
-    the "You should really redirect before you start page output" debug warning.
 20231231 iContent_1150bt - iContent - Current code does not respect 3 question limit when adding
     questions.
     2026031701 - iContent_1150: Removed misleading add-question limit message; the UI no longer
@@ -74,6 +51,66 @@ This files describes API changes and other work in the iContent code.
     the site instead of current course.
     2026031701 - iContent_1154: Being tested - Verified addquestionpage is course-scoped via
     course question-bank contexts/categories, and listings are filtered to the selected category.
+20240104 iContent_1156bt - I am getting, You should really redirect before you start page
+    output, when adding questions to a slide.
+    2026031702 - iContent_1156: Being tested - Moved the if ($action) POST-processing block in
+    addquestionpage.php to before the question_page_viewed event trigger and $PAGE setup
+    calls. redirect() now fires while the page is still in STATE_BEFORE_HEADER, eliminating
+    the "You should really redirect before you start page output" debug warning.
+20240111 iContent_1189bt - Feature request - Please consider using mustache templates as an alternative
+    to the HTML writer.
+    2026031703 - iContent_1189: Being tested - First Mustache migration implemented
+    by converting the manual-review question card output in toevaluate.php from
+    html_writer composition to mod/icontent/templates/manual_review_question_card.mustache
+    rendered via $OUTPUT->render_from_template().
+    2026031704 - iContent_1189: Follow-up fix - Student Result summary no longer
+    shows static "To evaluate" after manual grading. Restored strtoevaluate and
+    stropenanswer language strings in lang/en/icontent.php after duplicate-string
+    overrides had replaced them with non-parameterized values.
+    2026031705 - iContent_1189: Follow-up fix - Weighted marks now respected.
+    Attempt fractions are stored/scored against each question max mark (using
+    icontent_pages_questions.maxmark with question.defaultmark fallback),
+    manual-review grade input supports per-question maximums (not hard-coded 1),
+    and result summaries/percentages now display true "out of X" values.
+20240710 iContent_1262bt - Would be nice to enable the correction capability that has recently been discussed in the forum.
+    2026031801 - iContent_1262: Being tested - Correction capability is now covered by Moodle Question Engine
+    question types and their native feedback/hint mechanisms already available in iContent question rendering.
+    2026031802 - iContent_1262: Follow-up fix - Replaced deprecated file_encode_url() calls in iContent
+    page/question pluginfile URL builders with moodle_url::make_pluginfile_url() to prevent deprecation notice
+    exceptions while loading question pages (including Questions Testing 2026032502, DragDrop ddwtos).
+    2026031803 - iContent_1262: Follow-up fix - Added client-side ddwtos layout normalization passes
+    on initial render, content updates, and questions-area toggle so DragDrop drop-zone sizes are correct
+    on first page load without requiring manual browser reload.
+    2026031804 - iContent_1262: Follow-up fix - Replaced manual span size forcing with safe
+    qtype_ddwtos AMD re-init passes after first render/toggle/image load to keep normal drop-zone
+    and drag-item dimensions while still correcting first-load layout timing.
+    2026031805 - iContent_1262: Follow-up fix - Removed repeat-trigger loop behavior that could run
+    ddwtos layout logic too often, and switched to stable non-cumulative normalization only on explicit
+    navigation/toggle/image-load events to avoid oversized drag/drop UI.
+    2026031806 - iContent_1262: Follow-up fix - Added retry-based TinyMCE readiness checks for
+    AJAX-loaded essay/essayautograde response editors so toolbar controls render reliably on first
+    navigation to the page (no manual reload required).
+20240903 iContent_1314bt - Would be nice to be able to change a page title's color for use with background images.
+    2026031808 - iContent_1314: Being tested - Added per-page title color support
+    with page background image appearance/save/render/backup integration.
+    2026031809 - iContent_1314: Follow-up fixes - Hardened bgpage draft
+    preparation, save persistence, existing-file visibility, maxbytes/options,
+    strings, and no-data-loss handling during non-file edits.
+    2026031818 - iContent_1314: Follow-up fixes - Standardized page background
+    image editing on Moodle filemanager helpers and used temporary fallback UI
+    paths while diagnosing broken toolbar behavior.
+    2026031821 - iContent_1314: Follow-up fixes - Added temporary no-JS upload
+    fallback and related PHP 8.2/form compatibility cleanups so background image
+    replacement remained usable while the filemanager UI was failing.
+    2026031824 - iContent_1314: Follow-up fixes - Returned to documented
+    filemanager flow, iterated fallback approaches while repository JS remained
+    broken, and enabled TOC visibility on edit.php.
+    2026031828 - iContent_1314: Follow-up root-cause fix - Patched
+    lib/form/filemanager.js to tolerate debug-template HTML comments and restore
+    normal filemanager toolbar behavior on iContent edit pages.
+    2026031829 - iContent_1314: Follow-up UX cleanup - Added iContent TOC block
+    availability to Results pages (grade.php and grading.php) and removed the
+    temporary plain-upload fallback once normal filemanager behavior was restored.
 20241008 iContent_1329bt - iContent - Investigate creating an iContent Tags block. A tags
     block is available for each page and is included in backup and restore attempts.
 20241230 iContent_1346bt - iContent - PHPunit tests indicate there are seventeen(17) missing strings.
@@ -98,6 +135,10 @@ This files describes API changes and other work in the iContent code.
     qtype_essayautograde AMD (Tiny editor binding/readiness hardening).
     2026031701 - iContent_1444: Being tested - Grading confirmed correct; prior low scores
     were due to phrase award % set too low in question config, not an iContent or qtype bug.
+    2026031807 - iContent_1444: Follow-up test-config fix - In Questions Testing 2026032502,
+    page "Essay (autograde)", question "Essay - example 2" phrase weights were misconfigured
+    (First=5, Next=5, then/finally/in the end=0). Updated to First=34, "Next OR Then"=33,
+    "Finally OR In the end"=33 so required phrases now award expected full-credit autograde.
 20260316 iContent_1445 - Feature request - Previous/Next buttons should be hidden if only one page
     is in the activity. 2026031701 - iContent_1445: Hid top and bottom Previous/Next navigation bars when
     the activity has only one page.
@@ -108,6 +149,11 @@ This files describes API changes and other work in the iContent code.
     2026031707 - iContent_1446: Follow-up fix - Right answers now shows an
     equivalent-correct fractional metric for multi-input attempts (e.g. X.XX / N)
     while keeping single-input attempts as 0/1 style values.
+20260318 iContent_1447bt - iContent - Feature request - Need the TOC also on other pages
+    for admins.
+    2026031801 - iContent_1447: Being tested - Added iContent TOC block
+    availability to edit.php, grade.php, and grading.php so teachers/admins can
+    navigate pages while editing and reviewing results.
 
 === 2.0.4 === 20260312
 20231223 iContent_1138r - There does not seem to be a way to get to the index.php page.

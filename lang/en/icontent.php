@@ -54,6 +54,7 @@ $string['bgcolorpagehelp_help'] = 'Default color will be used as the background 
 $string['bgimage'] = 'Background image';
 $string['bgimagehelp'] = 'Image of Background';
 $string['bgimagehelp_help'] = 'Standard image that will be as the background on every page.';
+$string['bgimagemaxbytes'] = 'Maximum upload size';
 $string['bgimagepagehelp'] = 'Image of Background';
 $string['bgimagepagehelp_help'] = 'Standard image that will be as the background on each page.';
 
@@ -316,6 +317,9 @@ $string['showrecentactivity'] = 'Show recent activity';
 $string['showrecentactivityconfig'] = 'Everyone can see notifications in recent activity reports.';
 $string['showtitle'] = 'Show title';
 $string['showtitle_help'] = 'Show / Hide the page title.';
+$string['titlecolor'] = 'Page title color';
+$string['titlecolorhelp'] = 'Page title color';
+$string['titlecolorhelp_help'] = 'Set the page title text color used when the page title is shown.';
 $string['state'] = 'State';
 $string['statusview'] = 'Status view';
 $string['strattempttitle'] = 'Attempt held in page {$a->pagenum} title {$a->title}';

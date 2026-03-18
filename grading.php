@@ -44,6 +44,16 @@ $context = context_module::instance($cm->id);
 require_capability('mod/icontent:grade', $context);
 // Page setting.
 $PAGE->set_url('/mod/icontent/grading.php', ['id' => $cm->id, 'action' => $action, 'status' => $status, 'group' => $group]);
+$PAGE->set_pagelayout('incourse');
+
+// Show the iContent TOC block while in Manual review mode for quick page navigation.
+$pages = \mod_icontent\local\icontent_info::icontent_preload_pages($icontent);
+$currenttocpage = icontent_get_startpagenum($icontent, $context);
+$tocedit = has_capability('mod/icontent:edit', $context);
+if (!empty($pages)) {
+    icontent_add_fake_block($pages, $currenttocpage, $icontent, $cm, $tocedit);
+}
+
 // Header and strings.
 $PAGE->set_title($icontent->name);
 $PAGE->set_heading($course->fullname);

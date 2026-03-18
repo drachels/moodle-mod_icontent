@@ -25,6 +25,7 @@
 defined('MOODLE_INTERNAL') || die;
 
 require_once($CFG->libdir . '/formslib.php');
+require_once($CFG->libdir . '/filelib.php');
 
 /**
  * Class mod_icontent_pages_edit_form
@@ -36,10 +37,11 @@ class icontent_pages_edit_form extends moodleform {
      * @throws dml_exception
      */
     public function definition() {
-        global $CFG, $COURSE;
+        global $CFG, $COURSE, $USER;
 
         $page = $this->_customdata['page'];
         $pageicontentoptions = $this->_customdata['pageicontentoptions'];
+        $bgimagemaxbytes = $this->_customdata['bgimagemaxbytes'] ?? 0;
 
         $mform = $this->_form;
         $icontentconfig = get_config('mod_icontent');
@@ -49,6 +51,7 @@ class icontent_pages_edit_form extends moodleform {
             $page->bordercolor ?? $icontentconfig->bordercolor ?? '#E4E4E4',
             '#E4E4E4'
         );
+        $page->titlecolor = self::format_colour_for_picker($page->titlecolor ?? '#000000', '#000000');
 
         if (!empty($page->id)) {
             $mform->addElement('header', 'general', get_string('editingpage', 'icontent'));
@@ -129,6 +132,12 @@ class icontent_pages_edit_form extends moodleform {
         $mform->setType('showtitle', PARAM_INT);
         $mform->setDefault('showtitle', 1);
 
+        $titleattributes = ['id' => 'icontent_titlecolor_picker', 'size' => '10', 'maxlength' => '7'];
+        $mform->addElement('text', 'titlecolor', get_string('titlecolor', 'icontent'), $titleattributes);
+        $mform->setType('titlecolor', PARAM_TEXT);
+        $mform->addHelpButton('titlecolor', 'titlecolorhelp', 'icontent');
+        $mform->setDefault('titlecolor', $page->titlecolor);
+
         $mform->addElement('advcheckbox', 'showbgimage', get_string('showbgimage', 'icontent'));
         $mform->addHelpButton('showbgimage', 'showbgimage', 'icontent');
         $mform->setType('showbgimage', PARAM_INT);
@@ -136,14 +145,47 @@ class icontent_pages_edit_form extends moodleform {
 
         // Set up options for the filemanager setting.
         $filemanageroptions = [];
-                $filemanageroptions['subdirs'] = 0;
-                $filemanageroptions['maxbytes'] = $COURSE->maxbytes;
-                $filemanageroptions['maxfiles'] = 1;
-                $filemanageroptions['accepted_types'] = ['.jpg', '.png'];
-                $filemanageroptions['return_types'] = FILE_INTERNAL | FILE_EXTERNAL;
-        $mform->addElement('filemanager', 'bgimage', get_string('bgimage', 'icontent'), null, $filemanageroptions);
-        $mform->setType('bgimage', PARAM_INT);
-        $mform->addHelpButton('bgimage', 'bgimagepagehelp', 'icontent');
+        $filemanageroptions['subdirs'] = 0;
+        $filemanageroptions['maxbytes'] = $bgimagemaxbytes;
+        $filemanageroptions['maxfiles'] = 1;
+        $filemanageroptions['accepted_types'] = ['web_image'];
+        $filemanageroptions['return_types'] = FILE_INTERNAL | FILE_EXTERNAL;
+        $mform->addElement('filemanager', 'bgimage_filemanager', get_string('bgimage', 'icontent'), null, $filemanageroptions);
+        $mform->setType('bgimage_filemanager', PARAM_INT);
+        $mform->addHelpButton('bgimage_filemanager', 'bgimagepagehelp', 'icontent');
+
+        // Show currently stored page background files even if the JS filemanager UI is not working.
+        $storedfileshtml = '';
+        if (!empty($page->id)) {
+            $modulecontext = context_module::instance((int)$page->cmid);
+            $storedfiles = get_file_storage()->get_area_files(
+                $modulecontext->id,
+                'mod_icontent',
+                'bgpage',
+                (int)$page->id,
+                'id',
+                false
+            );
+            if (!empty($storedfiles)) {
+                $links = [];
+                foreach ($storedfiles as $storedfile) {
+                    $fileurl = moodle_url::make_pluginfile_url(
+                        $modulecontext->id,
+                        'mod_icontent',
+                        'bgpage',
+                        (int)$page->id,
+                        (string)$storedfile->get_filepath(),
+                        (string)$storedfile->get_filename(),
+                        true
+                    );
+                    $links[] = html_writer::link($fileurl, $storedfile->get_filename());
+                }
+                $storedfileshtml = html_writer::alist($links);
+            }
+        }
+        if ($storedfileshtml !== '') {
+            $mform->addElement('static', 'bgimage_current_files', get_string('files'), $storedfileshtml);
+        }
 
         // Legacy bgcolor field setup comments removed.
 
@@ -190,6 +232,7 @@ class icontent_pages_edit_form extends moodleform {
 
                     initColorInput('icontent_bgcolor_picker', '#FCFCFC');
                     initColorInput('icontent_bordercolor_picker', '#E4E4E4');
+                    initColorInput('icontent_titlecolor_picker', '#000000');
                 })();
             </script>
         ");

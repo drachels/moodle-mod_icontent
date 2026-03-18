@@ -206,5 +206,16 @@ function xmldb_icontent_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026030200, 'icontent');
     }
 
+    if ($oldversion < 2026031808) {
+        $table = new xmldb_table('icontent_pages');
+        $field = new xmldb_field('titlecolor', XMLDB_TYPE_CHAR, '20', null, null, null, null, 'showtitle');
+
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        upgrade_mod_savepoint(true, 2026031808, 'icontent');
+    }
+
     return true;
 }

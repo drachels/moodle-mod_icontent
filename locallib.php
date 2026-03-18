@@ -320,15 +320,30 @@ function icontent_qengine_rewrite_questiontext_pluginfile_urls(string $renderedh
     $wwwroot = preg_quote($CFG->wwwroot, '/');
     $pattern = '/(' . $wwwroot . '\/pluginfile\.php\/\d+\/question\/questiontext\/\d+\/\d+\/)(\d+)(\/[^"\?\s]+)(\?[^"\s]*)?/i';
 
-    $rewritten = preg_replace_callback($pattern, static function (array $matches) use ($cmcontext, $questionid, $CFG) {
+    $rewritten = preg_replace_callback($pattern, static function (array $matches) use ($cmcontext, $questionid) {
         $itemid = (int)$matches[2];
         $filepathandname = ltrim((string)$matches[3], '/');
         $query = isset($matches[4]) ? (string)$matches[4] : '';
 
-        $proxypath = '/' . $cmcontext->id . '/mod_icontent/questiontextproxy/' .
-            $questionid . '/' . $itemid . '/' . $filepathandname;
+        $slashpos = strrpos($filepathandname, '/');
+        if ($slashpos === false) {
+            $filepath = '/';
+            $filename = $filepathandname;
+        } else {
+            $filepath = '/' . trim(substr($filepathandname, 0, $slashpos), '/') . '/';
+            $filename = substr($filepathandname, $slashpos + 1);
+        }
 
-        return file_encode_url($CFG->wwwroot . '/pluginfile.php', $proxypath, false) . $query;
+        $proxyurl = moodle_url::make_pluginfile_url(
+            (int)$cmcontext->id,
+            'mod_icontent',
+            'questiontextproxy',
+            (int)$questionid,
+            $filepath,
+            $filename
+        );
+
+        return $proxyurl->out(false) . $query;
     }, $renderedhtml);
 
     return $rewritten ?? $renderedhtml;
@@ -344,7 +359,7 @@ function icontent_qengine_rewrite_questiontext_pluginfile_urls(string $renderedh
  * @return string
  */
 function icontent_qengine_embed_dd_background_data_uri(string $renderedhtml, int $questionid, string $qtype, int $cmid): string {
-    global $DB, $CFG;
+    global $DB;
 
     $contextid = (int)$DB->get_field('question', 'contextid', ['id' => $questionid]);
     if (empty($contextid)) {
@@ -365,9 +380,14 @@ function icontent_qengine_embed_dd_background_data_uri(string $renderedhtml, int
 
     $cmcontext = context_module::instance($cmid, IGNORE_MISSING);
     if ($cmcontext && $imagefile->get_filename() !== '.') {
-        $proxypath = '/' . $cmcontext->id . '/mod_icontent/qtypebgimage/' .
-            $questionid . '/' . $qtype . '/' . $imagefile->get_filename();
-        $proxysrc = file_encode_url($CFG->wwwroot . '/pluginfile.php', $proxypath, false);
+        $proxysrc = moodle_url::make_pluginfile_url(
+            (int)$cmcontext->id,
+            'mod_icontent',
+            'qtypebgimage',
+            (int)$questionid,
+            '/' . trim((string)$qtype, '/') . '/',
+            $imagefile->get_filename()
+        )->out(false);
 
         $rewrittenhtml = preg_replace_callback(
             '/<img([^>]*class="[^"]*dropbackground[^"]*"[^>]*)>/i',
@@ -624,9 +644,199 @@ function icontent_add_properties_css($pagestyle) {
  * @return void
  */
 function icontent_add_script_load_tooltip() {
-    return html_writer::script("");
-    // @codingStandardsIgnoreLine
-    // ...$(function() { $('[data-toggle="tooltip"]').tooltip(); }).
+    $js = "
+(function() {
+    function getGroupFromNode(node) {
+        if (!node || !node.className) {
+            return null;
+        }
+        var match = String(node.className).match(/group(\\d+)/);
+        return match ? match[1] : null;
+    }
+
+    function normalizeDdwtosQuestion(questionNode) {
+        if (!questionNode || questionNode.offsetParent === null) {
+            return;
+        }
+
+        var dragDropItems = questionNode.querySelectorAll('span.draghome[class*=group], span.drop[class*=group], input.placeinput[class*=group]');
+        if (!dragDropItems.length) {
+            return;
+        }
+
+        dragDropItems.forEach(function(itemNode) {
+            if (itemNode.style) {
+                itemNode.style.width = '';
+                itemNode.style.height = '';
+                itemNode.style.lineHeight = '';
+            }
+        });
+
+        var groups = {};
+        dragDropItems.forEach(function(itemNode) {
+            var group = getGroupFromNode(itemNode);
+            if (group) {
+                groups[group] = true;
+            }
+        });
+
+        Object.keys(groups).forEach(function(group) {
+            var items = questionNode.querySelectorAll('span.group' + group + ', input.group' + group);
+            if (!items.length) {
+                return;
+            }
+
+            var maxWidth = 0;
+            var maxHeight = 0;
+            items.forEach(function(itemNode) {
+                maxWidth = Math.max(maxWidth, Math.ceil(itemNode.offsetWidth || 0));
+                maxHeight = Math.max(maxHeight, Math.ceil(itemNode.offsetHeight || 0));
+            });
+
+            if (maxWidth <= 0 || maxHeight <= 0) {
+                return;
+            }
+
+            maxWidth += 8;
+            maxHeight += 2;
+            items.forEach(function(itemNode) {
+                if (!itemNode.style) {
+                    return;
+                }
+                itemNode.style.width = maxWidth + 'px';
+                itemNode.style.height = maxHeight + 'px';
+                itemNode.style.lineHeight = maxHeight + 'px';
+            });
+        });
+    }
+
+    function normalizeAllDdwtos() {
+        var questionNodes = document.querySelectorAll('.fulltextpage .que.ddwtos');
+        questionNodes.forEach(function(questionNode) {
+            normalizeDdwtosQuestion(questionNode);
+        });
+    }
+
+    function bindDdwtosImageLoads() {
+        var imageNodes = document.querySelectorAll('.fulltextpage .que.ddwtos img');
+        imageNodes.forEach(function(imageNode) {
+            if (imageNode.getAttribute('data-icontent-ddwtos-bound') === '1') {
+                return;
+            }
+            imageNode.setAttribute('data-icontent-ddwtos-bound', '1');
+            imageNode.addEventListener('load', function() {
+                normalizeAllDdwtos();
+            });
+        });
+    }
+
+    function isTinyToolbarReady(textareaNode) {
+        if (!textareaNode || !textareaNode.id) {
+            return true;
+        }
+
+        var iframeNode = document.getElementById(textareaNode.id + '_ifr');
+        if (!iframeNode) {
+            return false;
+        }
+
+        var editorNode = iframeNode.closest('.tox.tox-tinymce');
+        if (!editorNode) {
+            return false;
+        }
+
+        var toolbarButtons = editorNode.querySelectorAll('.tox-toolbar button, .tox-toolbar__group button');
+        return toolbarButtons.length > 0;
+    }
+
+    function ensureTinyEssayEditorsReady() {
+        if (typeof require !== 'function') {
+            return;
+        }
+
+        var textareaNodes = document.querySelectorAll('.fulltextpage textarea.qtype_essay_response, .fulltextpage .qtype_essay_response textarea');
+        if (!textareaNodes.length) {
+            return;
+        }
+
+        require(['editor_tiny/editor'], function(tinyEditor) {
+            if (!tinyEditor || typeof tinyEditor.setupForElementId !== 'function') {
+                return;
+            }
+
+            var attempts = 0;
+            var maxattempts = 12;
+
+            var tryInit = function() {
+                var pending = 0;
+
+                textareaNodes.forEach(function(textareaNode) {
+                    if (!textareaNode || !textareaNode.id) {
+                        return;
+                    }
+
+                    if (isTinyToolbarReady(textareaNode)) {
+                        return;
+                    }
+
+                    pending++;
+                    try {
+                        tinyEditor.setupForElementId({
+                            elementId: textareaNode.id,
+                            options: {}
+                        });
+                    } catch (error) {
+                        // Ignore and retry while the question HTML finishes rendering.
+                    }
+                });
+
+                if (pending > 0 && attempts < maxattempts) {
+                    attempts++;
+                    setTimeout(tryInit, 200);
+                }
+            };
+
+            tryInit();
+        });
+    }
+
+    function scheduleNormalizePasses() {
+        normalizeAllDdwtos();
+        bindDdwtosImageLoads();
+        ensureTinyEssayEditorsReady();
+        setTimeout(normalizeAllDdwtos, 120);
+        setTimeout(normalizeAllDdwtos, 400);
+        setTimeout(ensureTinyEssayEditorsReady, 120);
+        setTimeout(ensureTinyEssayEditorsReady, 400);
+    }
+
+    if (!window.__icontentDdwtosResizeHooked) {
+        window.__icontentDdwtosResizeHooked = true;
+
+        document.addEventListener('click', function(event) {
+            var target = event.target;
+            if (!target || !target.closest) {
+                return;
+            }
+
+            if (target.closest('.load-page') ||
+                target.closest('.btn-previous-page') ||
+                target.closest('.btn-next-page') ||
+                target.closest('#idtitlequestionsarea')) {
+                setTimeout(scheduleNormalizePasses, 650);
+            }
+        });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', scheduleNormalizePasses);
+    } else {
+        scheduleNormalizePasses();
+    }
+})();
+";
+
+    return html_writer::script($js);
 }
 
 /**
@@ -673,7 +883,6 @@ function icontent_add_borderwidth_options() {
  * @return string $fullpath
  */
 function icontent_get_bgimage($context) {
-    global $CFG;
     $fs = get_file_storage();
     // This is not very efficient!!
     $files = $fs->get_area_files(
@@ -688,8 +897,14 @@ function icontent_get_bgimage($context) {
     if (count($files) >= 1) {
         $file = reset($files);
         unset($files);
-        $path = '/' . $context->id . '/mod_icontent/icontent/' . $file->get_filepath() . $file->get_filename();
-        $fullurl = file_encode_url($CFG->wwwroot . '/pluginfile.php', $path, false);
+        $fullurl = moodle_url::make_pluginfile_url(
+            (int)$context->id,
+            'mod_icontent',
+            'icontent',
+            0,
+            (string)$file->get_filepath(),
+            (string)$file->get_filename()
+        )->out(false);
         $mimetype = $file->get_mimetype();
         if (file_mimetype_in_typegroup($mimetype, 'web_image')) { // It's an image.
             return $fullurl;
@@ -708,7 +923,6 @@ function icontent_get_bgimage($context) {
  * @return string $fullpath
  */
 function icontent_get_page_bgimage($context, $page) {
-    global $CFG;
     $fs = get_file_storage();
     // This is not very efficient!
     $files = $fs->get_area_files(
@@ -723,8 +937,14 @@ function icontent_get_page_bgimage($context, $page) {
     if (count($files) >= 1) {
         $file = reset($files);
         unset($files);
-        $path = '/' . $context->id . '/mod_icontent/bgpage/' . $page->id . $file->get_filepath() . $file->get_filename();
-        $fullurl = file_encode_url($CFG->wwwroot . '/pluginfile.php', $path, false);
+        $fullurl = moodle_url::make_pluginfile_url(
+            (int)$context->id,
+            'mod_icontent',
+            'bgpage',
+            (int)$page->id,
+            (string)$file->get_filepath(),
+            (string)$file->get_filename()
+        )->out(false);
         $mimetype = $file->get_mimetype();
         if (file_mimetype_in_typegroup($mimetype, 'web_image')) { // It's an image.
             return $fullurl;
@@ -1910,8 +2130,14 @@ function icontent_get_poodll_response_image_url(string $filename, int $userid, i
         }
     }
 
-    $path = '/' . $file->contextid . '/question/response_answer/' . $file->itemid . $file->filepath . $file->filename;
-    return file_encode_url($CFG->wwwroot . '/pluginfile.php', $path, false);
+    return moodle_url::make_pluginfile_url(
+        (int)$file->contextid,
+        'question',
+        'response_answer',
+        (int)$file->itemid,
+        (string)$file->filepath,
+        (string)$file->filename
+    )->out(false);
 }
 
 /**
@@ -4225,11 +4451,16 @@ function icontent_get_fullpageicontent($pagenum, $icontent, $context) {
     // Elements toolbar.
     $toolbarpage = icontent_make_toolbar($objpage, $icontent);
     // Add title page.
+    $titlestyle = '';
+    if (!empty($objpage->titlecolor)) {
+        $titlestyle = 'color: #' . icontent_normalize_hex_colour($objpage->titlecolor, '000000') . ';';
+    }
     $title = $objpage->showtitle ? html_writer::tag(
         'h3',
         '<i class="fa fa-hand-o-right"></i> ' . $objpage->title,
         [
             'class' => 'pagetitle',
+            'style' => $titlestyle,
         ]
     ) : false;
     // Make content.
