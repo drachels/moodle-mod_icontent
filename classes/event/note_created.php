@@ -24,7 +24,7 @@
 
 namespace mod_icontent\event;
 
-defined('MOODLE_INTERNAL') || die(); // @codingStandardsIgnoreLine
+defined('MOODLE_INTERNAL') || die(); // phpcs:ignore
 
 /**
  * The mod_icontent note created event class.

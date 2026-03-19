@@ -4159,6 +4159,7 @@ function icontent_make_toolbar($page, $icontent) {
     $update = false;
     $new = false;
     $addquestion = false;
+    $delete = false;
     // Check if editing exists for $USER.
     if (property_exists($USER, 'editing')) {
         $context = context_module::instance($page->cmid);
@@ -4219,12 +4220,30 @@ function icontent_make_toolbar($page, $icontent) {
                     'data-placement' => 'top',
                 ]
             );
+            // Delete current page.
+            $delete = html_writer::link(
+                new moodle_url(
+                    'delete.php',
+                    [
+                        'id' => $page->cmid,
+                        'pageid' => $page->id,
+                        'sesskey' => $USER->sesskey,
+                    ]
+                ),
+                '<i class="fa fa-trash fa-lg"></i>',
+                [
+                    'title' => s(get_string('delete')),
+                    'class' => 'icon icon-deletepage',
+                    'data-toggle' => 'tooltip',
+                    'data-placement' => 'top',
+                ]
+            );
         }
     }
     // Make toolbar.
     $toolbar = html_writer::tag(
         'div',
-        $highcontrast . $comments . $displayed . $addquestion . $update . $new,
+        $highcontrast . $comments . $displayed . $addquestion . $update . $new . $delete,
         [
             'class' => 'toolbarpage ',
         ]

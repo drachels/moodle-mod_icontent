@@ -23,7 +23,7 @@
  */
 namespace mod_icontent\privacy;
 
-defined('MOODLE_INTERNAL') || die(); // @codingStandardsIgnoreLine
+defined('MOODLE_INTERNAL') || die(); // phpcs:ignore
 
 use core_privacy\local\metadata\collection;
 use core_privacy\local\request\approved_contextlist;

@@ -29,7 +29,7 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-defined('MOODLE_INTERNAL') || die(); // @codingStandardsIgnoreLine
+defined('MOODLE_INTERNAL') || die(); // phpcs:ignore
 use mod_icontent\local\icontent_info;
 
 /**
@@ -1576,6 +1576,75 @@ function icontent_ajax_saveattempt($formdata, stdClass $cm, $icontent) {
 }
 
 /**
+ * Implementation of the function for printing the form elements that control
+ * whether the course reset functionality affects iContent.
+ *
+ * @param MoodleQuickForm $mform form passed by reference
+ */
+function icontent_reset_course_form_definition(&$mform) {
+    $mform->addElement('header', 'icontentheader', get_string('modulenameplural', 'icontent'));
+    $mform->addElement('static', 'icontentdelete', get_string('delete'));
+    $mform->addElement('advcheckbox', 'reset_icontent', get_string('reseticontentuserdata', 'icontent'));
+}
+
+/**
+ * Course reset form defaults.
+ *
+ * @param stdClass $course
+ * @return array
+ */
+function icontent_reset_course_form_defaults($course) {
+    return ['reset_icontent' => 1];
+}
+
+/**
+ * Removes all iContent grades from gradebook as part of course reset.
+ *
+ * @param int $courseid
+ * @return void
+ */
+function icontent_reset_gradebook($courseid) {
+    global $DB;
+
+    $sql = "SELECT i.*, cm.idnumber AS cmidnumber
+              FROM {icontent} i
+              JOIN {course_modules} cm ON cm.instance = i.id
+              JOIN {modules} m ON m.id = cm.module
+             WHERE m.name = :modname
+               AND i.course = :courseid";
+    $params = ['modname' => 'icontent', 'courseid' => $courseid];
+
+    if ($instances = $DB->get_records_sql($sql, $params)) {
+        foreach ($instances as $instance) {
+            icontent_grade_item_update($instance, true);
+        }
+    }
+}
+
+/**
+ * Clears user-generated records for a specific iContent activity instance.
+ *
+ * @param int $icontentid The iContent instance id.
+ * @return bool True when reset is complete (or instance no longer exists).
+ */
+function icontent_reset_instance($icontentid) {
+    global $DB;
+
+    $cm = get_coursemodule_from_instance('icontent', $icontentid, 0, false, IGNORE_MISSING);
+    if (!$cm) {
+        return true;
+    }
+
+    $DB->delete_records('icontent_pages_notes_like', ['cmid' => $cm->id]);
+    $DB->delete_records('icontent_pages_notes', ['cmid' => $cm->id]);
+    $DB->delete_records('icontent_pages_displayed', ['cmid' => $cm->id]);
+    $DB->delete_records('icontent_question_attempts', ['cmid' => $cm->id]);
+    $DB->delete_records('icontent_grades', ['cmid' => $cm->id]);
+
+    return true;
+}
+
+/**
  * This function is used by the reset_course_userdata function in moodlelib.
  * This function will remove all posts from the specified icontent
  * and clean up any related data.
@@ -1584,26 +1653,38 @@ function icontent_ajax_saveattempt($formdata, stdClass $cm, $icontent) {
  * @return array
  */
 function icontent_reset_userdata($data) {
-    global $CFG, $DB;
-    require_once($CFG->dirroot . "/mod/icontent/locallib.php");
+    global $DB;
 
     $componentstr = get_string('modulenameplural', 'icontent');
     $status = [];
 
-    // 20240920 Working on tags stuff based off wiki. Might need reset for notes, note replies, questions, question replies.
-    // Will need to research the db tables.
-
     if (!empty($data->reset_icontent)) {
         $instances = $DB->get_records('icontent', ['course' => $data->courseid]);
         foreach ($instances as $instance) {
-            if (reset_instance($instance->id)) {
+            if (icontent_reset_instance((int)$instance->id)) {
                 $status[] = [
-                    'component' => get_string('modulenameplural', 'icontent'),
-                    'item' => get_string('reseticontent', 'icontent') . ': ' . $instance->name,
+                    'component' => $componentstr,
+                    'item' => get_string('reseticontentuserdata', 'icontent') . ': ' . $instance->name,
                     'error' => false,
                 ];
             }
         }
+
+        // If core gradebook reset is not selected, still clear iContent grades to avoid stale grades.
+        if (empty($data->reset_gradebook_grades)) {
+            icontent_reset_gradebook((int)$data->courseid);
+        }
     }
+
+    // Updating dates - shift may be negative too.
+    if (!empty($data->timeshift)) {
+        shift_course_mod_dates('icontent', ['timeopen', 'timeclose'], $data->timeshift, $data->courseid);
+        $status[] = [
+            'component' => $componentstr,
+            'item' => get_string('datechanged'),
+            'error' => false,
+        ];
+    }
+
     return $status;
 }

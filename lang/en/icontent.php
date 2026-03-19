@@ -273,6 +273,10 @@ $string['progressbar'] = 'Progress bar';
 $string['progressbar_help'] = 'If enabled, a bar is displayed at the bottom of lesson pages showing approximate percentage of completion.';
 $string['questionenginephase1'] = 'Question engine migration (Phase 1)';
 $string['questionenginephase1_help'] = 'Enable initial wiring of iContent true/false questions to Moodle question engine usage (QUBA) while keeping current iContent rendering and submit behavior.';
+$string['messageprovider:question_notification'] = 'Question posted notification';
+$string['questionnotificationbody'] = '{$a->student} posted a new question in {$a->activity}.' . "\n\n" . 'View: {$a->url}';
+$string['questionnotificationsmall'] = '{$a->student} posted a new question in {$a->activity}';
+$string['questionnotificationsubject'] = 'New iContent question in {$a->activity}';
 $string['questions'] = 'Questions';
 $string['random'] = 'Random';
 $string['reassess'] = 'Reassess';
@@ -290,6 +294,7 @@ $string['respond'] = ' Responded ';
 $string['result'] = 'Result';
 $string['resultlastattempt'] = 'Result of the last attempt';
 $string['results'] = 'Results';
+$string['reseticontentuserdata'] = 'iContent user data';
 $string['reviewercomments'] = 'Teacher comments';
 
 

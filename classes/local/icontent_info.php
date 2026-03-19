@@ -25,7 +25,7 @@
  */
 namespace mod_icontent\local;
 
-defined('MOODLE_INTERNAL') || die(); // @codingStandardsIgnoreLine
+defined('MOODLE_INTERNAL') || die(); // phpcs:ignore
 define('ICONTENT_EVENT_TYPE_OPEN', 'open');
 define('ICONTENT_EVENT_TYPE_CLOSE', 'close');
 use mod_icontent\local\icontent_info;

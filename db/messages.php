@@ -15,33 +15,21 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Defines the view event.
+ * Defines message providers (types of messages being sent).
  *
  * @package    mod_icontent
- * @copyright  2016 Leo Renis Santos <leorenis@gmail.com>
+ * @copyright  2026 AL Rachels <drachels@drachels.com>
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-namespace mod_icontent\event;
+defined('MOODLE_INTERNAL') || die();
 
-defined('MOODLE_INTERNAL') || die(); // phpcs:ignore
-
-/**
- * The mod_icontent instance list viewed event class
- *
- * If the view mode needs to be stored as well, you may need to
- * override methods get_url() and get_legacy_log_data(), too.
- *
- * @package    mod_icontent
- * @copyright  2015 Leo Renis Santos <leorenis@gmail.com>
- * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
- */
-class course_module_viewed extends \core\event\course_module_viewed {
-    /**
-     * Initialize the event
-     */
-    protected function init() {
-        $this->data['objecttable'] = 'icontent';
-        parent::init();
-    }
-}
+$messageproviders = [
+    'question_notification' => [
+        'capability' => 'mod/icontent:manage',
+        'defaults' => [
+            'popup' => MESSAGE_PERMITTED + MESSAGE_DEFAULT_ENABLED,
+            'email' => MESSAGE_PERMITTED + MESSAGE_DEFAULT_ENABLED,
+        ],
+    ],
+];
