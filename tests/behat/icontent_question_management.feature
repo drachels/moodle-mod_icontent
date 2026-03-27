@@ -5,9 +5,7 @@ Feature: iContent question management on page view
   I need remove controls in edit mode and a working remove action
 
   Background:
-    Given the following config values are set as admin:
-      | questionenginephase1 | 1 | mod_icontent |
-    And the following "users" exist:
+    Given the following "users" exist:
       | username | firstname | lastname | email                |
       | teacher1 | Teacher   | One      | teacher1@example.com |
       | student1 | Student   | One      | student1@example.com |

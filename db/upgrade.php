@@ -217,5 +217,13 @@ function xmldb_icontent_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026031808, 'icontent');
     }
 
+    if ($oldversion < 2026032700) {
+        // Remove the questionenginephase1 config setting since Question Engine
+        // is now always enabled and is the only supported implementation.
+        unset_config('questionenginephase1', 'mod_icontent');
+
+        upgrade_mod_savepoint(true, 2026032700, 'icontent');
+    }
+
     return true;
 }

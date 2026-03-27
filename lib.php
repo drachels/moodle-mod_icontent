@@ -1262,10 +1262,6 @@ function icontent_ajax_replynote(stdClass $pagenote, stdClass $icontent) {
 function icontent_phase3_process_qengine_attempts(array $postdata, stdClass $cm, int $pageid): array {
     global $CFG, $SESSION, $USER, $DB;
 
-    if (!icontent_question_engine_phase1_enabled()) {
-        return [];
-    }
-
     if (empty($USER->id) || empty($SESSION->mod_icontent_quba) || !is_array($SESSION->mod_icontent_quba)) {
         return [];
     }

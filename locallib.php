@@ -66,15 +66,6 @@ function icontent_normalize_hex_colour($value, $fallback = 'FCFCFC') {
 }
 
 /**
- * Check whether the Phase 1 question engine bridge is enabled.
- *
- * @return bool
- */
-function icontent_question_engine_phase1_enabled() {
-    return !empty(get_config('mod_icontent', 'questionenginephase1'));
-}
-
-/**
  * Get qtypes supported by the Phase 1 bridge.
  *
  * @return array
@@ -132,10 +123,6 @@ function icontent_question_engine_phase1_get_session_key($cmid, $pageid, $userid
  */
 function icontent_question_engine_phase1_bootstrap_usage($objpage, $questions) {
     global $CFG, $SESSION, $USER;
-
-    if (!icontent_question_engine_phase1_enabled()) {
-        return;
-    }
 
     if (empty($questions) || empty($objpage->cmid) || empty($objpage->id) || empty($USER->id)) {
         return;
@@ -223,10 +210,6 @@ function icontent_question_engine_phase1_bootstrap_usage($objpage, $questions) {
  */
 function icontent_question_engine_phase2_render_question($objpage, $question, $displaynumber = 1) {
     global $CFG, $SESSION, $USER;
-
-    if (!icontent_question_engine_phase1_enabled()) {
-        return false;
-    }
 
     if (empty($question->qtype) || !in_array($question->qtype, icontent_question_engine_phase1_supported_qtypes())) {
         return false;
