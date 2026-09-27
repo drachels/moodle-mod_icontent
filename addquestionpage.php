@@ -242,7 +242,11 @@ $categorycontextids = [];
 $categorycontextids[] = (string)$modulecontext->id;
 
 // Prefer contexts from qbank module instances available in the course.
-$defaultbankmodname = \core_question\local\bank\question_bank_helper::get_default_question_bank_activity_name();
+// Fall back to the legacy module name if the newer core helper class is unavailable
+// on older Moodle branches.
+$defaultbankmodname = class_exists('\core_question\local\bank\question_bank_helper')
+    ? \core_question\local\bank\question_bank_helper::get_default_question_bank_activity_name()
+    : 'qbank';
 $modinfo = get_fast_modinfo($course);
 $banks = $modinfo->get_instances_of($defaultbankmodname);
 $categorymodulecmidbycontextid = [];

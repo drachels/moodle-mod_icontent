@@ -3083,15 +3083,48 @@ function icontent_get_questions_and_open_answers_by_user($userid, $cmid, $status
         ? "\n        LEFT JOIN {qtype_recordrtc_options} qro" .
             "\n               ON qro.questionid = q.id"
         : '';
-    $poodllcondition = <<<SQL
-                    OR (
-                        qa.fraction = 0
-                        AND q.qtype IN (
-                            'poodllrecording',
-                            'cloudpoodll'
-                        )
-                    )
-SQL;
+    $poodllcondition = '';
+    $essayautogradecondition = '';
+    $recordrtccondition = '';
+    $params = [$cmid, $userid, $status];
+
+    if ($status === ICONTENT_QTYPE_ESSAY_STATUS_TOEVALUATE) {
+        // Backward-compat fallback for legacy rows where rightanswer was not
+        // persisted as toevaluate yet. Keep valued rows excluded.
+        $essayautogradecondition = "\n                    OR (\n" .
+            "                        q.qtype = ?\n" .
+            "                        AND (\n" .
+            "                            qa.rightanswer IS NULL\n" .
+            "                            OR qa.rightanswer = ''\n" .
+            "                            OR qa.rightanswer = ?\n" .
+            "                        )\n" .
+            "                    )";
+        $poodllcondition = "\n                    OR (\n" .
+            "                        qa.fraction = 0\n" .
+            "                        AND q.qtype IN (\n" .
+            "                            'poodllrecording',\n" .
+            "                            'cloudpoodll'\n" .
+            "                        )\n" .
+            "                        AND (\n" .
+            "                            qa.rightanswer IS NULL\n" .
+            "                            OR qa.rightanswer = ''\n" .
+            "                            OR qa.rightanswer = ?\n" .
+            "                        )\n" .
+            "                    )";
+        $recordrtccondition = "\n                    OR (\n" .
+            "                        qa.fraction = 0\n" .
+            "                        AND q.qtype = 'recordrtc'\n" .
+            "                        AND (\n" .
+            "                            qa.rightanswer IS NULL\n" .
+            "                            OR qa.rightanswer = ''\n" .
+            "                            OR qa.rightanswer = ?\n" .
+            "                        )\n" .
+            "                    )";
+        $params[] = ICONTENT_QTYPE_ESSAYAUTOGRADE;
+        $params[] = ICONTENT_QTYPE_ESSAY_STATUS_TOEVALUATE;
+        $params[] = ICONTENT_QTYPE_ESSAY_STATUS_TOEVALUATE;
+        $params[] = ICONTENT_QTYPE_ESSAY_STATUS_TOEVALUATE;
+    }
 
     // SQL query.
     $sql = "SELECT qa.id,
@@ -3121,15 +3154,12 @@ SQL;
                AND qa.userid = ?
                AND (
                     qa.rightanswer IN (?)
-                    OR q.qtype = ?
+                    {$essayautogradecondition}
                     {$poodllcondition}
-                    OR (
-                        qa.fraction = 0
-                        AND q.qtype = 'recordrtc'
-                    )
+                    {$recordrtccondition}
                );";
     // Get records and return.
-    return $DB->get_records_sql($sql, [$cmid, $userid, $status, ICONTENT_QTYPE_ESSAYAUTOGRADE]);
+    return $DB->get_records_sql($sql, $params);
 }
 
 /**

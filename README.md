@@ -23,6 +23,26 @@ O plugin também permite o lançamento de perguntas sobre o conteúdo abordado, 
 * PHP >= 8.0
 * Moodle >= 4.0.10+ (Build: 20230806)
 
+## Troubleshooting: Adding Questions in Content Page
+
+If you see an error while adding a new question in Content Page, first verify
+your Moodle and PHP versions meet the minimum compatibility requirements above.
+
+Common symptom:
+
+* `Exception - Class 'core_question\local\bank\question_bank_helper' not found`
+
+What this usually means:
+
+* The site is running an unsupported stack (for example, Moodle 4.0.1 and/or
+	PHP 7.3), where required question-bank APIs are not available.
+
+Recommended action:
+
+* Upgrade to a supported environment:
+	* PHP >= 8.0
+	* Moodle >= 4.0.10+
+
 ## Question engine parity planning
 See [QUESTION_ENGINE_PARITY_PLAN.md](QUESTION_ENGINE_PARITY_PLAN.md) for the concrete qtype-by-qtype parity checklist and migration sequence.
 

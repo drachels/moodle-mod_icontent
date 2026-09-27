@@ -29,6 +29,8 @@ $id = required_param('id', PARAM_INT); // Course Module ID.
 $userid = required_param('userid', PARAM_INT); // Page note ID.
 $action = optional_param('action', 0, PARAM_BOOL); // Action.
 $status = optional_param('status', ICONTENT_QTYPE_ESSAY_STATUS_TOEVALUATE, PARAM_ALPHA); // Status.
+$notif = optional_param('notif', '', PARAM_ALPHA); // Save notification key.
+$savedcountparam = optional_param('savedcount', 0, PARAM_INT); // Saved rows count.
 
 $cm = get_coursemodule_from_id('icontent', $id, 0, false, MUST_EXIST);
 $course = $DB->get_record('course', ['id' => $cm->course], '*', MUST_EXIST);
@@ -53,8 +55,7 @@ if ($action) {
     $questions = optional_param_array('question', [], PARAM_RAW);
     $questioncomments = optional_param_array('questioncomment', [], PARAM_RAW);
     $questioncommentformats = optional_param_array('questioncommentformat', [], PARAM_INT);
-    $i = 0;
-    $update = false;
+    $savedcount = 0;
     if ($questions) {
         $attemptids = [];
         foreach (array_keys($questions) as $qname) {
@@ -91,36 +92,88 @@ if ($action) {
             [$strname, $answerid] = explode('-', $qname);
             $answerid = (int)$answerid;
             $maxgrade = $maxgradesbyattempt[$answerid] ?? 1.0;
-            $qvalue = (float)str_replace(',', '.', (string)$qvalue);
-            $qvalue = max(0.0, min($qvalue, $maxgrade));
             $commentkey = 'attemptid-' . $answerid;
+            $rawgrade = trim((string)$qvalue);
+            $reviewercomment = $questioncomments[$commentkey] ?? '';
+            $hasgradevalue = ($rawgrade !== '');
+            $hascommentvalue = (trim((string)$reviewercomment) !== '');
+
+            // Allow partial save: only update attempts that have at least
+            // a grade value or a reviewer comment entered.
+            if (!$hasgradevalue && !$hascommentvalue) {
+                continue;
+            }
+
             $attempt = new stdClass();
             $attempt->id = $answerid;
-            $attempt->fraction = $qvalue;
-            $attempt->rightanswer = ICONTENT_QTYPE_ESSAY_STATUS_VALUED;
-            $attempt->reviewercomment = $questioncomments[$commentkey] ?? '';
+            if ($hasgradevalue) {
+                $qvalue = (float)str_replace(',', '.', $rawgrade);
+                $qvalue = max(0.0, min($qvalue, $maxgrade));
+                $attempt->fraction = $qvalue;
+                $attempt->rightanswer = ICONTENT_QTYPE_ESSAY_STATUS_VALUED;
+            }
+            $attempt->reviewercomment = $reviewercomment;
             $attempt->reviewercommentformat = $questioncommentformats[$commentkey] ?? FORMAT_HTML;
             // Save values.
-            $update = icontent_update_question_attempts($attempt);
-            $i++;
+            if (icontent_update_question_attempts($attempt)) {
+                $savedcount++;
+            }
         }
     }
-    if ($update) {
+    if ($savedcount > 0) {
         // Update grade.
         icontent_set_grade_item($icontent, $cm->id, $user->id);
         // Log event.
         \mod_icontent\event\question_toevaluate_created::create_from_question_toevaluate($icontent, $context, $user)->trigger();
+
+        $remainingtoevaluate = icontent_get_questions_and_open_answers_by_user(
+            $user->id,
+            $cm->id,
+            ICONTENT_QTYPE_ESSAY_STATUS_TOEVALUATE
+        );
+
+        if (empty($remainingtoevaluate)) {
+            redirect(
+                new moodle_url(
+                    '/mod/icontent/grading.php',
+                    [
+                    'id' => $cm->id,
+                    'action' => 'grading',
+                    ]
+                ),
+                get_string('msgsucessevaluate', 'mod_icontent', $savedcount)
+            );
+        }
+
         redirect(
             new moodle_url(
-                '/mod/icontent/grading.php',
+                '/mod/icontent/toevaluate.php',
                 [
-                'id' => $cm->id,
-                'action' => 'grading',
+                    'id' => $cm->id,
+                    'status' => $status,
+                    'userid' => $userid,
+                    'notif' => 'saved',
+                    'savedcount' => $savedcount,
+                    'sesskey' => sesskey(),
                 ]
             ),
-            get_string('msgsucessevaluate', 'mod_icontent', $i)
+            get_string('msgsucessevaluatepartial', 'mod_icontent', $savedcount)
         );
     }
+
+    redirect(
+        new moodle_url(
+            '/mod/icontent/toevaluate.php',
+            [
+                'id' => $cm->id,
+                'status' => $status,
+                'userid' => $userid,
+                'notif' => 'nochanges',
+                'sesskey' => sesskey(),
+            ]
+        ),
+        get_string('msgnosavetoevaluate', 'mod_icontent')
+    );
 }
 
 $qopenanswers = icontent_get_questions_and_open_answers_by_user($user->id, $cm->id, $status);
@@ -141,6 +194,11 @@ if (!$qopenanswers) {
 echo $OUTPUT->header();
 echo $OUTPUT->heading($icontent->name);
 echo $OUTPUT->heading(get_string('manualreviewofparticipant', 'mod_icontent', fullname($user)), 3);
+if ($notif === 'saved' && $savedcountparam > 0) {
+    echo $OUTPUT->notification(get_string('msgsucessevaluatepartial', 'mod_icontent', $savedcountparam), 'success');
+} else if ($notif === 'nochanges') {
+    echo $OUTPUT->notification(get_string('msgnosavetoevaluate', 'mod_icontent'), 'info');
+}
 $preferredformat = editors_get_preferred_format($context);
 $preferrededitor = editors_get_preferred_editor($preferredformat);
 echo html_writer::start_tag('form', ['method' => 'post']);

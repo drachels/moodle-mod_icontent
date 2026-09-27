@@ -209,7 +209,19 @@ $string['maxpageshelp'] = 'Maximum number of pages';
 $string['maxpageshelp_help'] = 'Enter the maximum number of pages allowed. Enter only whole numbers. Importantly, in distance education icontent should use a maximum of 35 pages.';
 $string['messageprovider:question_notification'] = 'Question posted notification';
 $string['modulename'] = 'Content Pages';
-$string['modulename_help'] = 'The plugin for Moodle (Content Pages), was designed so that from it, conteudista, tutors, teachers and technicians can add content in courses, following usability and accessibility standards. This tool will be responsible for signaling the good practice of adding text, images, multimedia, among others. In it, the content will be distributed in pages, so that the monitoring of the content does not become something exhausting and tiring. The plugin also has a bookmark, so that the participant can be located, based on last logged furthermore allow the inclusion of public or private notes, which the participant can provide feedback on the content studied on the page and enjoy and reply comments from other colleagues. The plugin also allows the launch of questions about the content addressed, this provides better interaction between the participant and the virtual learning platform, and the feature may become an evaluation item or launch fractional notes on the items available in the course as defined in the plan of action. The described extension is fully responsive and can be accessed by any device.';
+$string['modulename_help'] = '###### Key features
+- Present course content to students or groups for study, review, feedback, and grading
+- Support individual page quiz questions regarding content on the pages
+- Support branches with access based on quiz question answers or links on a TOC
+- Allow public or private notes on individual content pages
+- Allow public or teacher only questions about individual content pages
+
+###### Ways to use it
+- Present course content that allows for individual study at the students own pace
+- Use page branches to present content based on logical parts of the content subject
+- Use branching to allow presenting content again based on answers to quiz questions';
+$string['modulename_summary'] = 'A Content Pages activity enables students to study and learn course content, at their own pace with content branching based on quiz questions.';
+$string['modulename_tip'] = 'Use Content Pages activities to allow student self-paced study and review.';
 $string['modulenameplural'] = 'Content Pages';
 $string['msgaddquestionpage'] = 'Successfully add questions!';
 $string['msgconfirmdeleteattempt'] = '<i class="fa fa-exclamation-triangle"></i> <span class="label label-warning"> {$a->totalanswers} responses </span>found in the attempt. Are you sure you want to remove attempting this page?';
@@ -217,7 +229,9 @@ $string['msgstatusdisplay'] = 'You can not add or remove questions because attem
 $string['msgsucess'] = 'Successfully recorded data!';
 $string['msgsucessduplicate'] = 'Page duplicated successfully!';
 $string['msgsucessevaluate'] = '{$a} evaluation completed successfully!';
+$string['msgsucessevaluatepartial'] = '{$a} evaluation(s) saved. You can continue grading the remaining questions.';
 $string['msgsucessexclusion'] = 'Successfully deleted records!';
+$string['msgnosavetoevaluate'] = 'No changes were detected to save.';
 $string['multianswer'] = 'Multi answer';
 $string['multichoice'] = 'Multi choice';
 $string['mylistallnotes'] = 'My list of all notes';
