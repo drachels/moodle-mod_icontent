@@ -62,8 +62,7 @@ Upgrade.txt working notes:
 
 
 
-=== 3.0.1 === pending
-
+=== 3.0.1 === (Build: 2026100300)
 20260808 iContent_1527 - Feature Request - When using Manual review of multiple answers, cannot
     do a partial, Save changes.
     2026080801 Updated toevaluate.php save flow to support in-progress saves:
