@@ -25,6 +25,8 @@
 
 defined('MOODLE_INTERNAL') || die();
 $string['action'] = 'Action';
+$string['tocexpandall'] = 'Expand all branches';
+$string['toccollapseall'] = 'Collapse all branches';
 $string['activityended'] = 'This activity is no longer open. It closed';
 
 $string['addafter'] = 'Add new page';

@@ -38,10 +38,15 @@
 }
 .path-mod-icontent .block_icontent_toc .icontent_toc .cluster-label {
     color: #5a5a5a;
-    display: block;
+    cursor: pointer;
+    display: list-item;
     font-size: 0.9em;
     font-weight: 600;
     margin-bottom: 0.25em;
+}
+.path-mod-icontent .block_icontent_toc .icontent_toc .cluster-label:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
 }
 .path-mod-icontent .block_icontent_toc .icontent_toc .cluster-pages {
     margin-left: 0;

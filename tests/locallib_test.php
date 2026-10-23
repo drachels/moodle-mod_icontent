@@ -74,6 +74,59 @@ final class locallib_test extends \advanced_testcase {
     }
 
     /**
+     * Branch disclosure opens only the current branch and preserves page visibility.
+     */
+    public function test_get_toc_collapsible_branches(): void {
+        [$course, $module, $icontent, $student] = $this->create_activity_fixture();
+        $this->setUser($student);
+
+        $parentid = $this->create_page($icontent->id, $module->cmid, 1, 'Main page');
+        $branchid = $this->create_page($icontent->id, $module->cmid, 2, 'Current branch page', [
+            'branchref' => 'first',
+            'branchname' => 'First branch',
+            'branchparentpageid' => $parentid,
+        ]);
+        $otherid = $this->create_page($icontent->id, $module->cmid, 3, 'Other branch page', [
+            'branchref' => 'second',
+            'branchname' => 'Second branch',
+            'branchparentpageid' => $parentid,
+        ]);
+        $hiddenid = $this->create_page($icontent->id, $module->cmid, 4, 'Hidden branch page', [
+            'branchref' => 'hidden',
+            'branchname' => 'Hidden branch',
+            'branchparentpageid' => $parentid,
+            'hidden' => 1,
+        ]);
+        $cm = get_coursemodule_from_id('icontent', $module->cmid, 0, false, MUST_EXIST);
+        $pages = \mod_icontent\local\icontent_info::icontent_preload_pages($icontent);
+
+        foreach ([$parentid, $branchid, $otherid] as $currentid) {
+            $toc = \icontent_get_toc($pages, (string)$pages[$currentid]->pagenum, $icontent, $cm, false);
+            $document = new \DOMDocument();
+            $document->loadHTML($toc);
+            $xpath = new \DOMXPath($document);
+            $this->assertCount(2, $xpath->query('//details'));
+            $this->assertCount(2, $xpath->query('//details/summary'));
+            $this->assertCount($currentid === $parentid ? 0 : 1, $xpath->query('//details[@open]'));
+            if ($currentid !== $parentid) {
+                $this->assertCount(1, $xpath->query('//details[@open]//a[@data-pageid="' . $currentid . '"]'));
+            }
+            $this->assertStringNotContainsString('Hidden branch', $toc);
+            $this->assertStringContainsString('data-toc-action="expand"', $toc);
+            $this->assertStringContainsString('data-toc-action="collapse"', $toc);
+        }
+
+        $this->setAdminUser();
+        $toc = \icontent_get_toc($pages, $pages[$hiddenid], $icontent, $cm, true);
+        $this->assertStringContainsString('Hidden branch page', $toc);
+        $this->assertStringContainsString('action-list', $toc);
+
+        $toc = \icontent_get_toc([$parentid => $pages[$parentid]], $pages[$parentid], $icontent, $cm, false);
+        $this->assertStringNotContainsString('<details', $toc);
+        $this->assertStringNotContainsString('data-toc-action', $toc);
+    }
+
+    /**
      * Ensure routed next/branch traversal/history-aware previous work together.
      */
     public function test_branch_navigation_uses_routes_and_history(): void {

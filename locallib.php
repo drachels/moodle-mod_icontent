@@ -877,7 +877,7 @@ function icontent_should_show_toc_menu(stdClass $icontent, stdClass $cm, $edit =
  * Add the icontent TOC sticky block to the default region.
  *
  * @param array $pages
- * @param object $page
+ * @param object|int|string $page Current page object or page number.
  * @param object $icontent
  * @param object $cm
  * @param bool $edit
@@ -1160,7 +1160,7 @@ function icontent_render_toc_item(
  * Generate toc structure.
  *
  * @param array $pages
- * @param object $page
+ * @param object|int|string $page Current page object or page number.
  * @param object $icontent
  * @param object $cm
  * @param bool $edit
@@ -1168,15 +1168,15 @@ function icontent_render_toc_item(
  */
 function icontent_get_toc($pages, $page, $icontent, $cm, $edit) {
     $context = context_module::instance($cm->id);
+    $currentpagenum = is_object($page) ? (int)$page->pagenum : (int)$page;
     $tpages = count($pages);
     $pagesbyid = [];
     foreach ($pages as $tocpage) {
         $pagesbyid[(int)$tocpage->id] = $tocpage;
     }
     $clusters = icontent_get_toc_clusters($pages);
-    $toc = '';
-    $toc .= html_writer::start_tag('div', ['class' => 'icontent_toc clearfix']);
-    $toc .= html_writer::start_tag('ul');
+    $toc = html_writer::start_tag('ul');
+    $hasbranches = false;
     $position = 0;
     foreach ($pages as $pg) {
         $parentid = (int)($pg->branchparentpageid ?? 0);
@@ -1197,12 +1197,16 @@ function icontent_get_toc($pages, $page, $icontent, $cm, $edit) {
         $renderedclusters = '';
         foreach ($clusters[(int)$pg->id] as $cluster) {
             $clusterpageshtml = '';
+            $iscurrentbranch = false;
             foreach ($cluster['pages'] as $clusterpage) {
                 if (!$edit && !empty($clusterpage->hidden)) {
                     continue;
                 }
 
                 $position++;
+                if ((int)$clusterpage->pagenum === $currentpagenum) {
+                    $iscurrentbranch = true;
+                }
                 $clusterpageshtml .= icontent_render_toc_item(
                     $clusterpage,
                     $context,
@@ -1219,9 +1223,16 @@ function icontent_get_toc($pages, $page, $icontent, $cm, $edit) {
                 continue;
             }
 
+            $hasbranches = true;
+            $attributes = ['class' => 'cluster-branch'];
+            if ($iscurrentbranch) {
+                $attributes['open'] = 'open';
+            }
             $renderedclusters .= html_writer::start_tag('li', ['class' => 'cluster-group']);
-            $renderedclusters .= html_writer::tag('span', s($cluster['label']), ['class' => 'cluster-label']);
+            $renderedclusters .= html_writer::start_tag('details', $attributes);
+            $renderedclusters .= html_writer::tag('summary', s($cluster['label']), ['class' => 'cluster-label']);
             $renderedclusters .= html_writer::tag('ul', $clusterpageshtml, ['class' => 'cluster-pages']);
+            $renderedclusters .= html_writer::end_tag('details');
             $renderedclusters .= html_writer::end_tag('li');
         }
 
@@ -1230,8 +1241,18 @@ function icontent_get_toc($pages, $page, $icontent, $cm, $edit) {
         }
     }
     $toc .= html_writer::end_tag('ul');
-    $toc .= html_writer::end_tag('div');
-    return $toc;
+    $controls = '';
+    if ($hasbranches) {
+        foreach (['expand' => 'tocexpandall', 'collapse' => 'toccollapseall'] as $action => $string) {
+            $controls .= html_writer::tag('button', get_string($string, 'mod_icontent'), [
+                'type' => 'button',
+                'class' => 'btn btn-link btn-sm',
+                'data-toc-action' => $action,
+            ]);
+        }
+        $controls = html_writer::div($controls, 'toc-branch-controls', ['hidden' => 'hidden']);
+    }
+    return html_writer::div($controls . $toc, 'icontent_toc clearfix');
 }
 
 /**

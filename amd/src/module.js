@@ -735,11 +735,17 @@ define(['jquery', 'jqueryui', 'mod_icontent/cookiehandler'], function($, jqui, c
         $(".page" + pagenum).addClass("active");
         $(".page" + pagenum).addClass('disabled').attr('aria-disabled', 'true').attr('tabindex', '-1');
         $(".page" + pagenum).prop("disabled", true);
+        $(".icontent_toc .page" + pagenum).parents("details.cluster-branch").prop("open", true);
     }
     return {
         init: function() {
             onChecksHighcontrast();
             onBtnActiveEnableDisableClick($(".fulltextpage").attr('data-pagenum'));
+            $(".icontent_toc .toc-branch-controls").prop("hidden", false);
+            $(".icontent_toc [data-toc-action]").on("click", function() {
+                $(this).closest(".icontent_toc").find("details.cluster-branch")
+                    .prop("open", $(this).attr("data-toc-action") === "expand");
+            });
             onUpdateDeepLink($(".load-page[data-cmid]:first").attr('data-cmid'), true);
             onNotifyFilterContentUpdated();
             onEnsureEssayEditorsReady();

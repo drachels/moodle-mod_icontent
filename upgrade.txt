@@ -61,6 +61,11 @@ Upgrade.txt working notes:
         Power Point presentations to the Book resource.
 
 === 4.0.0 === pending
+20261018  iContent_1572 - Feature Request - Need to be able to show/hide branches in a TOC.
+    Branch labels now expand/collapse their page lists using keyboard-accessible native
+    disclosure controls. Initially only the current page's branch is open; AJAX page
+    navigation opens the destination branch. Add Expand all / Collapse all controls.
+    This only folds navigation; page visibility, ordering and teacher actions are unchanged.
 
 === 3.0.1 === (Build: 2026100300)
 20260808 iContent_1527r - Feature Request - When using Manual review of multiple answers, cannot
