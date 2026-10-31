@@ -35,6 +35,7 @@
         <FIELD NAME="teamsubmission" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Use group submissions for assignment page sets."/>
         <FIELD NAME="publicsubmissions" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Allow course participants to view submitted page sets."/>
         <FIELD NAME="duedate" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Assignment submission due date."/>
+        <FIELD NAME="participationgrading" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Enable contribution review and individual grades for group submissions."/>
       </FIELDS>
       <KEYS>
         <KEY NAME="primary" TYPE="primary" FIELDS="id"/>

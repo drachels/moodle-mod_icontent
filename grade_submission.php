@@ -69,39 +69,60 @@ if ($maximumgrade <= 0) {
     throw new moodle_exception('gradeitemdisabled', 'mod_icontent');
 }
 
+$users = [];
+if ($submission->groupid) {
+    $members = get_enrolled_users($context, 'mod/icontent:submit', (int)$submission->groupid, 'u.*');
+    foreach ($members as $member) {
+        $users[(int)$member->id] = $member;
+    }
+} else {
+    $users[(int)$submission->userid] = $DB->get_record('user', ['id' => $submission->userid], '*', MUST_EXIST);
+}
+if (!$users) {
+    throw new moodle_exception('gradeassignmentnomembers', 'icontent');
+}
+$reviewparticipation = !empty($icontent->participationgrading) && !empty($submission->groupid);
+$gradeitem = grade_item::fetch([
+    'courseid' => $course->id,
+    'itemtype' => 'mod',
+    'itemmodule' => 'icontent',
+    'iteminstance' => $icontent->id,
+    'itemnumber' => 0,
+]);
+$existinggrades = $gradeitem ? grade_grade::fetch_all(['itemid' => $gradeitem->id]) : [];
+
 if (data_submitted()) {
     require_sesskey();
     $rawgrade = required_param('grade', PARAM_RAW_TRIMMED);
-    if (!is_numeric($rawgrade)) {
-        throw new invalid_parameter_exception('Grade must be numeric');
-    }
-    $grade = (float)$rawgrade;
-    if ($grade < $minimumgrade || $grade > $maximumgrade || ($scalegrade && floor($grade) !== $grade)) {
-        throw new invalid_parameter_exception('Grade is outside the permitted range');
-    }
     $feedback = optional_param('feedback', '', PARAM_TEXT);
-
-    $users = [];
-    if ($submission->groupid) {
-        $members = get_enrolled_users($context, 'mod/icontent:submit', (int)$submission->groupid, 'u.id');
-        foreach ($members as $member) {
-            $users[(int)$member->id] = (int)$member->id;
+    $selected = optional_param_array('individual', [], PARAM_BOOL);
+    $individualgrades = optional_param_array('individualgrade', [], PARAM_RAW_TRIMMED);
+    if ((!$reviewparticipation && ($selected || $individualgrades)) || array_diff(array_keys($selected), array_keys($users))) {
+        throw new invalid_parameter_exception('Individual grading is not permitted for this request');
+    }
+    $overrides = [];
+    foreach ($selected as $userid => $enabled) {
+        if ($enabled) {
+            $overrides[$userid] = $individualgrades[$userid] ?? '';
         }
-    } else {
-        $users[(int)$submission->userid] = (int)$submission->userid;
     }
-    if (!$users) {
-        throw new moodle_exception('gradeassignmentnomembers', 'icontent');
+    $grades = \mod_icontent\local\assignment::build_member_grades(
+        array_keys($users),
+        $rawgrade,
+        $overrides,
+        $maximumgrade,
+        $scalegrade,
+        (int)$USER->id
+    );
+    if ($gradeitem && $gradeitem->is_locked()) {
+        throw new moodle_exception('assignmentgradelocked', 'icontent');
     }
-
-    $grades = [];
-    foreach ($users as $userid) {
-        $grades[$userid] = [
-            'userid' => $userid,
-            'rawgrade' => $grade,
-            'usermodified' => (int)$USER->id,
-        ];
+    foreach ($existinggrades ?: [] as $existinggrade) {
+        if (isset($users[$existinggrade->userid]) && ($existinggrade->is_locked() || $existinggrade->is_overridden())) {
+            throw new moodle_exception('assignmentgradelocked', 'icontent');
+        }
     }
+    $transaction = $DB->start_delegated_transaction();
     $graderesult = grade_update(
         'mod/icontent',
         (int)$course->id,
@@ -116,13 +137,14 @@ if (data_submitted()) {
     }
 
     $submission->status = \mod_icontent\local\assignment::STATUS_GRADED;
-    $submission->grade = $grade;
+    $submission->grade = (float)$rawgrade;
     $submission->feedback = $feedback;
     $submission->feedbackformat = FORMAT_PLAIN;
     $submission->grader = (int)$USER->id;
     $submission->timegraded = time();
     $submission->timemodified = time();
     $DB->update_record('icontent_submissions', $submission);
+    $transaction->allow_commit();
 
     redirect(
         new moodle_url('/mod/icontent/submissions.php', ['id' => $cm->id]),
@@ -153,10 +175,70 @@ $form .= html_writer::empty_tag('input', [
     'min' => $minimumgrade,
     'max' => $maximumgrade,
     'step' => $step,
-    'value' => $submission->grade === null ? '' : format_float((float)$submission->grade, 5),
+    'value' => $submission->grade === null ? '' : format_float((float)$submission->grade, 5, false),
     'required' => 'required',
     'class' => 'form-control',
 ]);
+if ($reviewparticipation) {
+    $contributions = \mod_icontent\local\assignment::get_contributions($submission, $context);
+    $form .= html_writer::tag('h3', get_string('participationgrading', 'icontent'));
+    $form .= html_writer::tag('p', get_string(
+        $contributions === null ? 'contributionlogunavailable' : 'contributionreviewnotice',
+        'icontent'
+    ));
+    $gradesbyuser = [];
+    foreach ($existinggrades ?: [] as $existinggrade) {
+        $gradesbyuser[$existinggrade->userid] = $existinggrade;
+    }
+    $table = new html_table();
+    $table->head = [
+        get_string('fullname'),
+        get_string('loggedpagechanges', 'icontent'),
+        get_string('useindividualgrade', 'icontent'),
+        get_string('individualgrade', 'icontent'),
+    ];
+    foreach ($users as $userid => $member) {
+        $existinggrade = $gradesbyuser[$userid]->rawgrade ?? null;
+        $hasoverride = $submission->grade !== null && $existinggrade !== null &&
+            grade_floats_different((float)$existinggrade, (float)$submission->grade);
+        $flagged = $submission->grade === null && $contributions !== null && empty($contributions[$userid]);
+        $checkboxattrs = [
+            'type' => 'checkbox',
+            'id' => 'id_individual_' . $userid,
+            'name' => 'individual[' . $userid . ']',
+            'value' => 1,
+        ];
+        if ($hasoverride || $flagged) {
+            $checkboxattrs['checked'] = 'checked';
+        }
+        $checkbox = html_writer::empty_tag('input', $checkboxattrs);
+        $checkbox .= html_writer::tag('label', get_string('useindividualgrade', 'icontent'), [
+            'for' => 'id_individual_' . $userid,
+            'class' => 'sr-only',
+        ]);
+        $input = html_writer::tag('label', get_string('individualgrade', 'icontent'), [
+            'for' => 'id_individualgrade_' . $userid,
+            'class' => 'sr-only',
+        ]);
+        $input .= html_writer::empty_tag('input', [
+            'type' => 'number',
+            'id' => 'id_individualgrade_' . $userid,
+            'name' => 'individualgrade[' . $userid . ']',
+            'min' => $minimumgrade,
+            'max' => $maximumgrade,
+            'step' => $step,
+            'value' => $hasoverride ? format_float((float)$existinggrade, 5, false) : '',
+            'class' => 'form-control',
+        ]);
+        $table->data[] = [
+            s(fullname($member)),
+            $contributions === null ? get_string('notavailable') : (string)($contributions[$userid] ?? 0),
+            $checkbox,
+            $input,
+        ];
+    }
+    $form .= html_writer::table($table);
+}
 $form .= html_writer::tag('label', get_string('feedback', 'icontent'), ['for' => 'id_feedback']);
 $form .= html_writer::tag(
     'textarea',

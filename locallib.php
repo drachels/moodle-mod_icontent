@@ -1841,33 +1841,33 @@ function icontent_get_startpagenum($icontent, $context, int $submissionid = 0) {
     // Discover page to be presented to the student.
     global $USER;
     $cm = get_coursemodule_from_instance('icontent', $icontent->id);
-    $pagedisplay = $DB->get_record_sql(
-        "SELECT MAX(timecreated) AS maxtimecreated
-           FROM {icontent_pages_displayed}
-          WHERE cmid IN(?)
-            AND userid IN(?);",
-        [
-            $cm->id,
-            $USER->id,
-        ]
+    $params = [(int)$cm->id, (int)$USER->id, $submissionid];
+    $totalpagesvieweduser = $DB->count_records_sql(
+        "SELECT COUNT(DISTINCT p.id)
+           FROM {icontent_pages_displayed} d
+           JOIN {icontent_pages} p ON p.id = d.pageid AND p.cmid = d.cmid
+          WHERE d.cmid = ? AND d.userid = ? AND p.submissionid = ? AND p.hidden = 0",
+        $params
     );
-    $totalpagesvieweduser = $DB->count_records('icontent_pages_displayed', ['cmid' => $cm->id, 'userid' => $USER->id]);
-    $totalpagesavailable = $DB->count_records('icontent_pages', ['cmid' => $cm->id, 'hidden' => 0]);
-    if (!$pagedisplay->maxtimecreated || $totalpagesvieweduser === $totalpagesavailable) {
+    $totalpagesavailable = $DB->count_records('icontent_pages', [
+        'cmid' => $cm->id,
+        'submissionid' => $submissionid,
+        'hidden' => 0,
+    ]);
+    $lastpages = $DB->get_records_sql(
+        "SELECT d.id, p.pagenum
+           FROM {icontent_pages_displayed} d
+           JOIN {icontent_pages} p ON p.id = d.pageid AND p.cmid = d.cmid
+          WHERE d.cmid = ? AND d.userid = ? AND p.submissionid = ? AND p.hidden = 0
+       ORDER BY d.timecreated DESC, d.id DESC",
+        $params,
+        0,
+        1
+    );
+    if (!$lastpages || $totalpagesvieweduser === $totalpagesavailable) {
         return icontent_get_minpagenum($icontent);
     }
-    $lastpagedisplay = $DB->get_record(
-        "icontent_pages_displayed",
-        [
-            'cmid' => $cm->id,
-            'userid' => $USER->id,
-            'timecreated' => $pagedisplay->maxtimecreated,
-        ],
-        'id,
-        pageid'
-    );
-    $page = $DB->get_record("icontent_pages", ['id' => $lastpagedisplay->pageid], "id, pagenum");
-    return $page->pagenum;
+    return reset($lastpages)->pagenum;
 }
 
 /**

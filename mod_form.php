@@ -126,6 +126,13 @@ class mod_icontent_mod_form extends moodleform_mod {
         $mform->setDefault('teamsubmission', 0);
         $mform->hideIf('teamsubmission', 'assignmentmode', 'eq', 0);
 
+        $mform->addElement('selectyesno', 'participationgrading', get_string('participationgrading', 'icontent'));
+        $mform->addHelpButton('participationgrading', 'participationgrading', 'icontent');
+        $mform->setType('participationgrading', PARAM_INT);
+        $mform->setDefault('participationgrading', 0);
+        $mform->hideIf('participationgrading', 'assignmentmode', 'eq', 0);
+        $mform->hideIf('participationgrading', 'teamsubmission', 'eq', 0);
+
         $mform->addElement('selectyesno', 'publicsubmissions', get_string('publicsubmissions', 'icontent'));
         $mform->addHelpButton('publicsubmissions', 'publicsubmissions', 'icontent');
         $mform->setType('publicsubmissions', PARAM_INT);

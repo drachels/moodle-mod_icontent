@@ -75,6 +75,7 @@ class backup_icontent_activity_structure_step extends backup_questions_activity_
             'teamsubmission',
             'publicsubmissions',
             'duedate',
+            'participationgrading',
             ]
         );
 

@@ -94,11 +94,21 @@ class page_created extends \core\event\base {
         $data = [
             'context' => $context,
             'objectid' => $page->id,
+            'other' => ['submissionid' => (int)($page->submissionid ?? 0)],
         ];
         /** @var page_created $event */
         $event = self::create($data);
         $event->add_record_snapshot('icontent', $icontent);
         $event->add_record_snapshot('icontent_pages', $page);
         return $event;
+    }
+
+    /**
+     * Map submission ids when restoring activity logs.
+     *
+     * @return array
+     */
+    public static function get_other_mapping() {
+        return ['submissionid' => ['db' => 'icontent_submissions', 'restore' => 'icontent_submission']];
     }
 }

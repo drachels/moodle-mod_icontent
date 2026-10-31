@@ -37,6 +37,7 @@ require_once($CFG->dirroot . '/mod/icontent/locallib.php');
  * @covers ::icontent_get_next_pagenum
  * @covers ::icontent_get_prev_pagenum
  * @covers ::icontent_duplicate_page
+ * @covers ::icontent_get_startpagenum
  */
 final class locallib_test extends \advanced_testcase {
     public function setUp(): void {
@@ -262,6 +263,45 @@ final class locallib_test extends \advanced_testcase {
         $this->assertSame(10, (int)$newpage->submissionid);
         $this->assertSame(3, (int)$submissionfollowing->pagenum);
         $this->assertSame(2, (int)$reference->pagenum);
+    }
+
+    /**
+     * Reference pages resume independently of a graded group's last displayed page.
+     */
+    public function test_reference_resume_excludes_graded_submission_pages(): void {
+        global $DB;
+
+        [$course, $module, $icontent, $student] = $this->create_activity_fixture();
+        $this->setUser($student);
+        $DB->set_field('icontent', 'assignmentmode', 1, ['id' => $icontent->id]);
+        $icontent->assignmentmode = 1;
+        $this->create_page($icontent->id, $module->cmid, 1, 'First reference');
+        $referenceid = $this->create_page($icontent->id, $module->cmid, 2, 'Second reference');
+        $cm = get_coursemodule_from_id('icontent', $module->cmid, 0, false, MUST_EXIST);
+        $submission = \mod_icontent\local\assignment::get_current_submission($icontent, $cm, (int)$student->id);
+        $DB->set_field('icontent_submissions', 'status', 'graded', ['id' => $submission->id]);
+        $groupid = $this->create_page($icontent->id, $module->cmid, 17, 'Group page', [
+            'submissionid' => $submission->id,
+        ]);
+        $context = \context_module::instance($module->cmid);
+        $DB->insert_record('icontent_pages_displayed', (object)[
+            'cmid' => $module->cmid,
+            'pageid' => $groupid,
+            'userid' => $student->id,
+            'timecreated' => time(),
+        ]);
+        $this->assertSame(1, (int)\icontent_get_startpagenum($icontent, $context));
+
+        $DB->insert_record('icontent_pages_displayed', (object)[
+            'cmid' => $module->cmid,
+            'pageid' => $referenceid,
+            'userid' => $student->id,
+            'timecreated' => time() - 1,
+        ]);
+        $this->assertSame(2, (int)\icontent_get_startpagenum($icontent, $context));
+
+        $DB->set_field('icontent_pages', 'hidden', 1, ['id' => $referenceid]);
+        $this->assertSame(1, (int)\icontent_get_startpagenum($icontent, $context));
     }
 
     /**

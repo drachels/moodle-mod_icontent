@@ -98,6 +98,109 @@ class assignment {
     }
 
     /**
+     * Count logged page creation/edit events for a submission, or return null when logging is unavailable.
+     *
+     * @param \stdClass $submission Submission record.
+     * @param \context_module $context Module context.
+     * @return array|null User ids mapped to event counts.
+     */
+    public static function get_contributions(\stdClass $submission, \context_module $context): ?array {
+        global $DB;
+
+        $readers = get_log_manager()->get_readers('\core\log\sql_reader');
+        $reader = null;
+        foreach ($readers as $candidate) {
+            if ($candidate->is_logging()) {
+                $reader = $candidate;
+                break;
+            }
+        }
+        if ($reader === null) {
+            return null;
+        }
+
+        // Older events lack submissionid; surviving page records identify their page set.
+        $pageids = $DB->get_records('icontent_pages', [
+            'icontentid' => $submission->icontentid,
+            'submissionid' => $submission->id,
+        ], '', 'id');
+        $params = [
+            'contextid' => $context->id,
+            'created' => '\mod_icontent\event\page_created',
+            'updated' => '\mod_icontent\event\page_updated',
+            'start' => $submission->timecreated,
+            'end' => $submission->timesubmitted ?: time(),
+        ];
+        $where = 'contextid = :contextid AND eventname IN (:created, :updated) ' .
+            'AND timecreated >= :start AND timecreated <= :end';
+        $counts = [];
+        $offset = 0;
+        do {
+            $events = $reader->get_events_select($where, $params, 'timecreated ASC, id ASC', $offset, 500);
+            foreach ($events as $event) {
+                $eventsubmissionid = $event->other['submissionid'] ?? null;
+                if (
+                    ($eventsubmissionid !== null && (int)$eventsubmissionid === (int)$submission->id) ||
+                    ($eventsubmissionid === null && isset($pageids[$event->objectid]))
+                ) {
+                    $counts[$event->userid] = ($counts[$event->userid] ?? 0) + 1;
+                }
+            }
+            $offset += count($events);
+        } while (count($events) === 500);
+        return $counts;
+    }
+
+    /**
+     * Validate a group grade and optional individual overrides and build gradebook updates.
+     *
+     * @param int[] $userids Eligible submission members.
+     * @param string $rawgrade Group grade.
+     * @param array $overrides User ids mapped to individual grade inputs.
+     * @param int $maximumgrade Highest permitted grade.
+     * @param bool $scalegrade Whether grades are scale positions.
+     * @param int $grader Grading user.
+     * @return array Gradebook updates keyed by user id.
+     */
+    public static function build_member_grades(
+        array $userids,
+        string $rawgrade,
+        array $overrides,
+        int $maximumgrade,
+        bool $scalegrade,
+        int $grader
+    ): array {
+        $validate = static function ($value) use ($maximumgrade, $scalegrade): float {
+            if (!is_numeric($value)) {
+                throw new \invalid_parameter_exception('Grade must be numeric');
+            }
+            $grade = (float)$value;
+            if (
+                !is_finite($grade) ||
+                $grade < ($scalegrade ? 1 : 0) ||
+                $grade > $maximumgrade ||
+                ($scalegrade && floor($grade) !== $grade)
+            ) {
+                throw new \invalid_parameter_exception('Grade is outside the permitted range');
+            }
+            return $grade;
+        };
+        $groupgrade = $validate($rawgrade);
+        if (array_diff(array_keys($overrides), $userids)) {
+            throw new \invalid_parameter_exception('Individual grades must belong to submission members');
+        }
+        $grades = [];
+        foreach ($userids as $userid) {
+            $grades[$userid] = [
+                'userid' => $userid,
+                'rawgrade' => array_key_exists($userid, $overrides) ? $validate($overrides[$userid]) : $groupgrade,
+                'usermodified' => $grader,
+            ];
+        }
+        return $grades;
+    }
+
+    /**
      * Check whether the user owns or may view a submission.
      *
      * @param \stdClass $submission Submission record.

@@ -375,8 +375,29 @@ if (!empty($icontent->assignmentmode)) {
                 if ($ownsubmission->status === assignment::STATUS_GRADED && $ownsubmission->grade !== null) {
                     echo html_writer::tag(
                         'p',
-                        get_string('submissiongrade', 'icontent') . ': ' . format_float((float)$ownsubmission->grade, 2)
+                        get_string($ownsubmission->groupid ? 'submissiongroupgrade' : 'submissiongrade', 'icontent') .
+                            ': ' . format_float((float)$ownsubmission->grade, 2)
                     );
+                    if ($ownsubmission->groupid) {
+                        require_once($CFG->libdir . '/gradelib.php');
+                        $gradeinfo = grade_get_grades(
+                            (int)$course->id,
+                            'mod',
+                            'icontent',
+                            (int)$icontent->id,
+                            (int)$USER->id
+                        );
+                        foreach ($gradeinfo->items as $gradeitem) {
+                            $usergrade = $gradeitem->grades[$USER->id];
+                            echo html_writer::tag(
+                                'p',
+                                get_string('submissionindividualgrade', 'icontent') . ': ' .
+                                    ($gradeitem->hidden || $usergrade->hidden
+                                        ? get_string('hidden')
+                                        : s($usergrade->str_grade))
+                            );
+                        }
+                    }
                     if (trim((string)$ownsubmission->feedback) !== '') {
                         echo html_writer::div(
                             format_text($ownsubmission->feedback, (int)$ownsubmission->feedbackformat),
