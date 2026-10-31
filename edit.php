@@ -72,6 +72,33 @@ if ($isassignmentstudent) {
     }
 } 
 
+if ($pageid) {
+    $requestedpage = $DB->get_record('icontent_pages', [
+        'id' => $pageid,
+        'icontentid' => $icontent->id,
+        'cmid' => $cm->id,
+    ], '*', MUST_EXIST);
+    if ($isassignmentstudent) {
+        if ((int)$requestedpage->submissionid !== $submissionid) {
+            throw new required_capability_exception($context, 'mod/icontent:submit', 'nopermissions', '');
+        }
+    } else if ($submissionid !== (int)$requestedpage->submissionid) {
+        if ($requestedsubmissionid) {
+            throw new moodle_exception('invalidsubmission', 'mod_icontent');
+        }
+        $submissionid = (int)$requestedpage->submissionid;
+        if ($submissionid) {
+            $submission = assignment::get_submission((int)$icontent->id, $submissionid);
+            if (
+                !$submission ||
+                !assignment::can_view_submission($submission, $icontent, $cm, $context, (int)$USER->id)
+            ) {
+                throw new required_capability_exception($context, 'mod/icontent:view', 'nopermissions', '');
+            }
+        }
+    }
+}
+
 // Log this request.
 $params = [
     'objectid' => $PAGE->cm->instance,

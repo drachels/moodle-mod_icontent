@@ -23,6 +23,7 @@
  */
 
 use mod_icontent\local\icontent_info;
+use mod_icontent\local\assignment;
 
 require(dirname(__FILE__) . '/../../config.php');
 require_once(dirname(__FILE__) . '/locallib.php');
@@ -31,6 +32,7 @@ global $DB;
 
 $id = required_param('id', PARAM_INT); // Course Module ID.
 $pageid = required_param('pageid', PARAM_INT); // Source page ID.
+$requestedsubmissionid = optional_param('submissionid', 0, PARAM_INT);
 
 $cm = get_coursemodule_from_id('icontent', $id, 0, false, MUST_EXIST);
 $course = $DB->get_record('course', ['id' => $cm->course], '*', MUST_EXIST);
@@ -40,14 +42,28 @@ require_login($course, false, $cm);
 require_sesskey();
 
 $context = context_module::instance($cm->id);
-require_capability('mod/icontent:edit', $context);
 $sourcepage = $DB->get_record('icontent_pages', [
     'id' => $pageid,
     'icontentid' => $icontent->id,
     'cmid' => $cm->id,
 ], '*', MUST_EXIST);
-if (!\mod_icontent\local\assignment::can_view_page($sourcepage, $icontent, $cm, $context, (int)$USER->id)) {
-    throw new required_capability_exception($context, 'mod/icontent:view', 'nopermissions', '');
+if (!empty($icontent->assignmentmode) && !empty($sourcepage->submissionid)) {
+    $submission = assignment::get_submission((int)$icontent->id, (int)$sourcepage->submissionid);
+    if (
+        !$submission ||
+        ($requestedsubmissionid && $requestedsubmissionid !== (int)$submission->id) ||
+        !assignment::can_edit_submission($submission, $context, (int)$USER->id)
+    ) {
+        throw new required_capability_exception($context, 'mod/icontent:submit', 'nopermissions', '');
+    }
+} else {
+    require_capability('mod/icontent:edit', $context);
+    if (
+        $requestedsubmissionid !== (int)$sourcepage->submissionid ||
+        !assignment::can_view_page($sourcepage, $icontent, $cm, $context, (int)$USER->id)
+    ) {
+        throw new required_capability_exception($context, 'mod/icontent:view', 'nopermissions', '');
+    }
 }
 $createdpage = icontent_duplicate_page((int)$icontent->id, (int)$cm->id, (int)$pageid, $context);
 

@@ -236,6 +236,35 @@ final class locallib_test extends \advanced_testcase {
     }
 
     /**
+     * Duplicating a submission page only changes page order within that submission.
+     */
+    public function test_duplicate_submission_page_keeps_submission_scope(): void {
+        global $DB;
+
+        [$course, $module, $icontent, $student] = $this->create_activity_fixture();
+        $this->setUser($student);
+
+        $sourceid = $this->create_page($icontent->id, $module->cmid, 1, 'Group page', [
+            'submissionid' => 10,
+        ]);
+        $submissionfollowingid = $this->create_page($icontent->id, $module->cmid, 2, 'Next group page', [
+            'submissionid' => 10,
+        ]);
+        $referenceid = $this->create_page($icontent->id, $module->cmid, 2, 'Reference page');
+
+        $context = \context_module::instance($module->cmid);
+        $duplicated = \icontent_duplicate_page((int)$icontent->id, (int)$module->cmid, $sourceid, $context);
+
+        $newpage = $DB->get_record('icontent_pages', ['id' => (int)$duplicated->id], '*', MUST_EXIST);
+        $submissionfollowing = $DB->get_record('icontent_pages', ['id' => $submissionfollowingid], '*', MUST_EXIST);
+        $reference = $DB->get_record('icontent_pages', ['id' => $referenceid], '*', MUST_EXIST);
+
+        $this->assertSame(10, (int)$newpage->submissionid);
+        $this->assertSame(3, (int)$submissionfollowing->pagenum);
+        $this->assertSame(2, (int)$reference->pagenum);
+    }
+
+    /**
      * Ensure duplicate copies files from both page and bgpage fileareas.
      */
     public function test_duplicate_page_copies_page_and_bgpage_files(): void {

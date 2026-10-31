@@ -1048,6 +1048,7 @@ function icontent_render_toc_action_list(stdClass $page, stdClass $cm, $position
             [
                 'cmid' => $page->cmid,
                 'id' => $page->id,
+                'submissionid' => (int)($page->submissionid ?? 0),
                 'sesskey' => $USER->sesskey,
             ]
         ),
@@ -1060,6 +1061,7 @@ function icontent_render_toc_action_list(stdClass $page, stdClass $cm, $position
             [
                 'id' => $page->cmid,
                 'pageid' => $page->id,
+                'submissionid' => (int)($page->submissionid ?? 0),
                 'sesskey' => $USER->sesskey,
             ]
         ),
@@ -1111,6 +1113,7 @@ function icontent_render_toc_action_list(stdClass $page, stdClass $cm, $position
             [
                 'cmid' => $page->cmid,
                 'pagenum' => $page->pagenum,
+                'submissionid' => (int)($page->submissionid ?? 0),
                 'sesskey' => $USER->sesskey,
             ]
         ),
@@ -6670,9 +6673,9 @@ function icontent_make_toolbar($page, $icontent) {
     $duplicate = false;
     $addquestion = false;
     $delete = false;
+    $context = context_module::instance($page->cmid);
     // Check if editing exists for $USER.
     if (property_exists($USER, 'editing')) {
-        $context = context_module::instance($page->cmid);
         // Edit mode (view.php). Icons for teachers.
         if ($USER->editing && has_any_capability(['mod/icontent:edit', 'mod/icontent:manage'], $context)) {
             // Add new question.
@@ -6701,6 +6704,7 @@ function icontent_make_toolbar($page, $icontent) {
                     [
                         'cmid' => $page->cmid,
                         'id' => $page->id,
+                        'submissionid' => (int)($page->submissionid ?? 0),
                         'sesskey' => $USER->sesskey,
                     ]
                 ),
@@ -6719,6 +6723,7 @@ function icontent_make_toolbar($page, $icontent) {
                     [
                         'cmid' => $page->cmid,
                         'pagenum' => $page->pagenum,
+                        'submissionid' => (int)($page->submissionid ?? 0),
                         'sesskey' => $USER->sesskey,
                     ]
                 ),
@@ -6737,6 +6742,7 @@ function icontent_make_toolbar($page, $icontent) {
                     [
                         'id' => $page->cmid,
                         'pageid' => $page->id,
+                        'submissionid' => (int)($page->submissionid ?? 0),
                         'sesskey' => $USER->sesskey,
                     ]
                 ),
@@ -6762,6 +6768,40 @@ function icontent_make_toolbar($page, $icontent) {
                 [
                     'title' => s(get_string('delete')),
                     'class' => 'icon icon-deletepage',
+                    'data-toggle' => 'tooltip',
+                    'data-placement' => 'top',
+                ]
+            );
+        }
+    }
+    if (
+        empty($duplicate) &&
+        !empty($icontent->assignmentmode) &&
+        !empty($page->submissionid) &&
+        has_capability('mod/icontent:submit', $context)
+    ) {
+        $submission = \mod_icontent\local\assignment::get_submission(
+            (int)$icontent->id,
+            (int)$page->submissionid
+        );
+        if (
+            $submission &&
+            \mod_icontent\local\assignment::can_edit_submission($submission, $context, (int)$USER->id)
+        ) {
+            $duplicate = html_writer::link(
+                new moodle_url(
+                    'duplicate.php',
+                    [
+                        'id' => $page->cmid,
+                        'pageid' => $page->id,
+                        'submissionid' => (int)$page->submissionid,
+                        'sesskey' => sesskey(),
+                    ]
+                ),
+                '<i class="fa fa-copy fa-lg"></i>',
+                [
+                    'title' => s(get_string('duplicatepage', 'mod_icontent')),
+                    'class' => 'icon icon-duplicatepage',
                     'data-toggle' => 'tooltip',
                     'data-placement' => 'top',
                 ]
