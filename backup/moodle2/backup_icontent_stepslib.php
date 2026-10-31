@@ -71,6 +71,29 @@ class backup_icontent_activity_structure_step extends backup_questions_activity_
             'shownotesarea',
             'maxnotesperpages',
             'copyright',
+            'assignmentmode',
+            'teamsubmission',
+            'publicsubmissions',
+            'duedate',
+            ]
+        );
+
+        $submissions = new backup_nested_element('submissions');
+        $submission = new backup_nested_element(
+            'submission',
+            ['id'],
+            [
+                'userid',
+                'groupid',
+                'status',
+                'timesubmitted',
+                'timecreated',
+                'timemodified',
+                'grade',
+                'feedback',
+                'feedbackformat',
+                'grader',
+                'timegraded',
             ]
         );
 
@@ -90,6 +113,7 @@ class backup_icontent_activity_structure_step extends backup_questions_activity_
             'page',
             ['id'],
             ['coverpage',
+            'submissionid',
             'title',
             'branchref',
             'branchname',
@@ -203,6 +227,9 @@ class backup_icontent_activity_structure_step extends backup_questions_activity_
         );
 
         // Build the tree.
+        $icontent->add_child($submissions);
+        $submissions->add_child($submission);
+
         $icontent->add_child($grades);
         $grades->add_child($grade);
 
@@ -229,7 +256,15 @@ class backup_icontent_activity_structure_step extends backup_questions_activity_
 
         // Define data sources.
         $icontent->set_source_table('icontent', ['id' => backup::VAR_ACTIVITYID]);
-        $page->set_source_table('icontent_pages', ['icontentid' => backup::VAR_PARENTID]);
+        if ($userinfo) {
+            $submission->set_source_table('icontent_submissions', ['icontentid' => backup::VAR_PARENTID]);
+            $page->set_source_table('icontent_pages', ['icontentid' => backup::VAR_PARENTID]);
+        } else {
+            $page->set_source_sql(
+                'SELECT * FROM {icontent_pages} WHERE icontentid = ? AND submissionid = 0',
+                [backup::VAR_PARENTID]
+            );
+        }
         $pagequestion->set_source_sql(
             'SELECT pq.*, qv.questionbankentryid
                FROM {icontent_pages_questions} pq
@@ -336,6 +371,10 @@ class backup_icontent_activity_structure_step extends backup_questions_activity_
         $pagesdisplayed->annotate_ids('user', 'userid');
         $questionattempt->annotate_ids('user', 'userid');
         $grade->annotate_ids('user', 'userid');
+        $submission->annotate_ids('user', 'userid');
+        $submission->annotate_ids('user', 'grader');
+        $submission->annotate_ids('group', 'groupid');
+        $page->annotate_ids('icontent_submission', 'submissionid');
 
         // Define file annotations.
         $icontent->annotate_files('mod_icontent', 'intro', null);

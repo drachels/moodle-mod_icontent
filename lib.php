@@ -181,6 +181,16 @@ function icontent_delete_instance($id) {
     $DB->delete_records('icontent_pages_questions', ['cmid' => $cm->id]);
     $DB->delete_records('icontent_question_attempts', ['cmid' => $cm->id]);
     $DB->delete_records('icontent_pages_displayed', ['cmid' => $cm->id]);
+    $DB->delete_records('icontent_submissions', ['icontentid' => $icontent->id]);
+    $pageids = $DB->get_fieldset_select(
+        'icontent_pages',
+        'id',
+        'icontentid = :icontentid',
+        ['icontentid' => (int)$icontent->id]
+    );
+    foreach ($pageids as $pageid) {
+        \core_tag_tag::remove_all_item_tags('mod_icontent', 'icontent_pages', (int)$pageid);
+    }
     $DB->delete_records('icontent_pages', ['icontentid' => $icontent->id]);
     $DB->delete_records('icontent_grades', ['cmid' => $cm->id]);
     $DB->delete_records('icontent', ['id' => $icontent->id]);
@@ -766,13 +776,16 @@ function icontent_get_file_info($browser, $areas, $course, $cm, $context, $filea
  * @param array $options additional options affecting the file serving
  */
 function icontent_pluginfile($course, $cm, $context, $filearea, $args, $forcedownload, array $options = []) {
-    global $CFG, $DB;
+    global $CFG, $DB, $USER;
 
     if ($context->contextlevel != CONTEXT_MODULE) {
         return false;
     }
 
     require_course_login($course, true, $cm);
+    if (!$icontent = $DB->get_record('icontent', ['id' => $cm->instance])) {
+        return false;
+    }
 
     if ($filearea === 'qtypebgimage') {
         $questionid = (int)array_shift($args);
@@ -909,8 +922,31 @@ function icontent_pluginfile($course, $cm, $context, $filearea, $args, $forcedow
         case 'bgpage':
             $pageid = (int) array_shift($args);
             $itemid = $pageid;
-            if (!$page = $DB->get_record('icontent_pages', ['id' => $pageid])) {
+            if (!$page = $DB->get_record('icontent_pages', [
+                'id' => $pageid,
+                'cmid' => $cm->id,
+                'icontentid' => $cm->instance,
+            ])) {
                 return false;
+            }
+            if (!empty($page->submissionid)) {
+                $submission = \mod_icontent\local\assignment::get_submission(
+                    (int)$page->icontentid,
+                    (int)$page->submissionid
+                );
+                $context = context_module::instance($cm->id);
+                if (
+                    !$submission ||
+                    !\mod_icontent\local\assignment::can_view_submission(
+                        $submission,
+                        $icontent,
+                        $cm,
+                        $context,
+                        (int)$USER->id
+                    )
+                ) {
+                    return false;
+                }
             }
             break;
         case 'icontent':
@@ -919,10 +955,6 @@ function icontent_pluginfile($course, $cm, $context, $filearea, $args, $forcedow
         default:
             return false;
             break;
-    }
-
-    if (!$icontent = $DB->get_record('icontent', ['id' => $cm->instance])) {
-        return false;
     }
 
     $relativepath = implode('/', $args);
@@ -1113,9 +1145,9 @@ function icontent_extend_settings_navigation(settings_navigation $settingsnav, $
  * @param object $sourcepageid
  * @return array $pageicontent
  */
-function icontent_ajax_getpage($pagenum, $icontent, $context, $sourcepageid = 0) {
+function icontent_ajax_getpage($pagenum, $icontent, $context, $sourcepageid = 0, int $submissionid = 0) {
     require_once(dirname(__FILE__) . '/locallib.php');
-    $objpage = icontent_get_fullpageicontent($pagenum, $icontent, $context, $sourcepageid);
+    $objpage = icontent_get_fullpageicontent($pagenum, $icontent, $context, $sourcepageid, $submissionid);
     return $objpage;
 }
 
@@ -1758,6 +1790,30 @@ function icontent_reset_instance($icontentid) {
     $DB->delete_records('icontent_grades', ['cmid' => $cm->id]);
     icontent_reset_question_engine_usages((int)$cm->id);
 
+    $submissionpages = $DB->get_records_select(
+        'icontent_pages',
+        'icontentid = :icontentid AND submissionid > 0',
+        ['icontentid' => (int)$icontentid],
+        '',
+        'id'
+    );
+    if ($submissionpages) {
+        $context = context_module::instance((int)$cm->id);
+        $fs = get_file_storage();
+        foreach ($submissionpages as $page) {
+            $DB->delete_records('icontent_pages_questions', ['pageid' => $page->id]);
+            \core_tag_tag::remove_all_item_tags('mod_icontent', 'icontent_pages', (int)$page->id);
+            $fs->delete_area_files($context->id, 'mod_icontent', 'page', (int)$page->id);
+            $fs->delete_area_files($context->id, 'mod_icontent', 'bgpage', (int)$page->id);
+        }
+        $DB->delete_records_select(
+            'icontent_pages',
+            'icontentid = :icontentid AND submissionid > 0',
+            ['icontentid' => (int)$icontentid]
+        );
+    }
+    $DB->delete_records('icontent_submissions', ['icontentid' => (int)$icontentid]);
+
     return true;
 }
 
@@ -1828,7 +1884,7 @@ function icontent_reset_userdata($data) {
 
     // Updating dates - shift may be negative too.
     if (!empty($data->timeshift)) {
-        shift_course_mod_dates('icontent', ['timeopen', 'timeclose'], $data->timeshift, $data->courseid);
+        shift_course_mod_dates('icontent', ['timeopen', 'timeclose', 'duedate'], $data->timeshift, $data->courseid);
         $status[] = [
             'component' => $componentstr,
             'item' => get_string('datechanged'),

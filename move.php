@@ -40,8 +40,14 @@ $context = context_module::instance($cm->id);
 require_capability('mod/icontent:edit', $context);
 
 $page = $DB->get_record('icontent_pages', ['id' => $pageid, 'icontentid' => $icontent->id], '*', MUST_EXIST);
+if (!\mod_icontent\local\assignment::can_view_page($page, $icontent, $cm, $context, (int)$USER->id)) {
+    throw new required_capability_exception($context, 'mod/icontent:view', 'nopermissions', '');
+}
 
-$oldpages = $DB->get_records('icontent_pages', ['icontentid' => $icontent->id], 'pagenum', 'id, pagenum');
+$oldpages = $DB->get_records('icontent_pages', [
+    'icontentid' => $icontent->id,
+    'submissionid' => (int)$page->submissionid,
+], 'pagenum', 'id, pagenum');
 
 $nothing = 0;
 
@@ -148,4 +154,8 @@ if (!$nothing) {
     }
 }
 
-redirect('view.php?id=' . $cm->id . '&pageid=' . $page->id);
+redirect(new moodle_url('/mod/icontent/view.php', [
+    'id' => $cm->id,
+    'pageid' => $page->id,
+    'submissionid' => (int)$page->submissionid,
+]));

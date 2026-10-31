@@ -113,6 +113,35 @@ class mod_icontent_mod_form extends moodleform_mod {
             get_string('icontentclosetime', 'icontent'),
             ['optional' => true, 'step' => 1]
         );
+
+        $mform->addElement('header', 'assignmenthdr', get_string('assignmentsettings', 'icontent'));
+        $mform->addElement('selectyesno', 'assignmentmode', get_string('assignmentmode', 'icontent'));
+        $mform->addHelpButton('assignmentmode', 'assignmentmode', 'icontent');
+        $mform->setType('assignmentmode', PARAM_INT);
+        $mform->setDefault('assignmentmode', 0);
+
+        $mform->addElement('selectyesno', 'teamsubmission', get_string('teamsubmission', 'icontent'));
+        $mform->addHelpButton('teamsubmission', 'teamsubmission', 'icontent');
+        $mform->setType('teamsubmission', PARAM_INT);
+        $mform->setDefault('teamsubmission', 0);
+        $mform->hideIf('teamsubmission', 'assignmentmode', 'eq', 0);
+
+        $mform->addElement('selectyesno', 'publicsubmissions', get_string('publicsubmissions', 'icontent'));
+        $mform->addHelpButton('publicsubmissions', 'publicsubmissions', 'icontent');
+        $mform->setType('publicsubmissions', PARAM_INT);
+        $mform->setDefault('publicsubmissions', 0);
+        $mform->hideIf('publicsubmissions', 'assignmentmode', 'eq', 0);
+
+        $mform->addElement(
+            'date_time_selector',
+            'duedate',
+            get_string('duedate', 'icontent'),
+            ['optional' => true, 'step' => 1]
+        );
+        $mform->setType('duedate', PARAM_INT);
+        $mform->setDefault('duedate', 0);
+        $mform->hideIf('duedate', 'assignmentmode', 'eq', 0);
+
         // Content Pages activity password setup.
         $mform->addElement('selectyesno', 'usepassword', get_string('usepassword', 'icontent'));
         $mform->addHelpButton('usepassword', 'usepassword', 'icontent');
@@ -275,6 +304,30 @@ class mod_icontent_mod_form extends moodleform_mod {
                 ]
             );
         }
+    }
+
+    /**
+     * Validate assignment group settings.
+     *
+     * @param array $data
+     * @param array $files
+     * @return array
+     */
+    public function validation($data, $files) {
+        global $COURSE;
+
+        $errors = parent::validation($data, $files);
+        if (!empty($data['assignmentmode']) && !empty($data['teamsubmission'])) {
+            $groupmode = (int)($data['groupmode'] ?? NOGROUPS);
+            if ($groupmode === -1) {
+                $groupmode = groups_get_course_groupmode($COURSE);
+            }
+            if ($groupmode === NOGROUPS) {
+                $errors['teamsubmission'] = get_string('groupsrequiredsetting', 'icontent');
+            }
+        }
+
+        return $errors;
     }
 
     /**

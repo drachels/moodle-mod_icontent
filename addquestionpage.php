@@ -64,7 +64,7 @@ $currentpage = $DB->get_record('icontent_pages', [
     'id' => $pageid,
     'cmid' => $cm->id,
     'icontentid' => $icontent->id,
-], 'id, title, pagenum', MUST_EXIST);
+], 'id, title, pagenum, submissionid', MUST_EXIST);
 
 // Require login.
 require_login($course, true, $cm);
@@ -72,6 +72,9 @@ $modulecontext = context_module::instance($cm->id);
 $context = $modulecontext;
 $coursecontext = $modulecontext->get_course_context(true)->id;
 require_capability('mod/icontent:newquestion', $context);
+if (!\mod_icontent\local\assignment::can_view_page($currentpage, $icontent, $cm, $context, (int)$USER->id)) {
+    throw new required_capability_exception($context, 'mod/icontent:view', 'nopermissions', '');
+}
 
 $qtscurrentpage = icontent_get_questions_of_currentpage($pageid, $cm->id);
 $qtscurrentpagebydisplayqid = $qtscurrentpage;

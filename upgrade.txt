@@ -22,11 +22,7 @@ Upgrade.txt working notes:
         GROUP BY/suffix bug that caused icontent items to bleed across all courses. Admin
         attempts may appear if admin is also enrolled as a student in that course (normal
         Grade Me behaviour, not a plugin defect).
-20240111 iContent_1167 - iContent - Capability "mod/icontent:rate" was not found! This has to
-    be fixed in code.
-    2024011101 Got all these debug messages when I was doing a MooTyper upgrade, and the new
-       Grade Me stuff popped up, and I stupidly checked the box asking me if I wanted to display
-       any Content Pages essays that needed grading. Went back and turned it off for now.
+
 20240205 iContent_1191 - The extend navigation function is empty.
 20240616 iContent_1253 - Request in discussion for doubts/question to be emailed to the teacher.
 20240616 iContent_1254 - Navigation clicks to open/close block areas does not work reliably.
@@ -48,7 +44,7 @@ Upgrade.txt working notes:
 20260313 iContent_1440 - Need to implement running code prechecks before a release.
 20260602 iContent_1498 - Feature Request - It would be nice if Content Pages had mobile support.
 20260623 iContent_1508 - Feature Request - It would be nice to include Content Page documentation
-    as an activity.
+    as an included activity.
 20260623 iContent_1509 - Feature Request - It would be nice if the question_matrix was an editable page.
 20260623 iContent_1510 - Feature Request - Need to see about changing files to classes.
 20260715 iContent_1517 - Feature Request - See if question results can make other activities mandatory.
@@ -61,11 +57,22 @@ Upgrade.txt working notes:
         Power Point presentations to the Book resource.
 
 === 4.0.0 === pending
+20240111 iContent_1167 - iContent - Capability "mod/icontent:rate" was not found! This has to
+    be fixed in code.
+    2026103100 Added the missing capability for teachers, editing teachers and managers.
+    2024011101 Got all these debug messages when I was doing a MooTyper upgrade, and the new
+       Grade Me stuff popped up, and I stupidly checked the box asking me if I wanted to display
+       any Content Pages essays that needed grading. Went back and turned it off for now.
 20261018  iContent_1572 - Feature Request - Need to be able to show/hide branches in a TOC.
-    Branch labels now expand/collapse their page lists using keyboard-accessible native
-    disclosure controls. Initially only the current page's branch is open; AJAX page
-    navigation opens the destination branch. Add Expand all / Collapse all controls.
-    This only folds navigation; page visibility, ordering and teacher actions are unchanged.
+    2026101801 Branch labels now expand/collapse their page lists using keyboard-accessible native
+        disclosure controls. Initially only the current page's branch is open; AJAX page
+        navigation opens the destination branch. Add Expand all / Collapse all controls.
+        This only folds navigation; page visibility, ordering and teacher actions are unchanged.
+20261031  iContent_1575 - iContent - Feature Request - Add the capability to make Content Page
+    Branches into an assignment.
+    2026103100 Added standalone individual/group page-set assignments with due dates, final
+        submission, teacher grading, and optional visibility to course participants.
+
 
 === 3.0.1 === (Build: 2026100300)
 20260808 iContent_1527r - Feature Request - When using Manual review of multiple answers, cannot

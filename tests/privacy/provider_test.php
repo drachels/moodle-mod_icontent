@@ -148,6 +148,64 @@ final class provider_test extends provider_testcase {
     }
 
     /**
+     * Erasing an individual assignment removes its page set but preserves reference pages.
+     */
+    public function test_delete_individual_assignment_submission(): void {
+        global $DB;
+
+        $course = $this->getDataGenerator()->create_course();
+        $module = $this->getDataGenerator()->create_module('icontent', [
+            'course' => $course->id,
+            'assignmentmode' => 1,
+        ]);
+        $cm = get_coursemodule_from_id('icontent', $module->cmid, 0, false, MUST_EXIST);
+        $user = $this->getDataGenerator()->create_user();
+        $now = time();
+        $submissionid = (int)$DB->insert_record('icontent_submissions', (object)[
+            'icontentid' => $module->id,
+            'userid' => $user->id,
+            'groupid' => 0,
+            'status' => 'draft',
+            'timesubmitted' => 0,
+            'timecreated' => $now,
+            'timemodified' => $now,
+            'feedbackformat' => FORMAT_PLAIN,
+            'grader' => 0,
+            'timegraded' => 0,
+        ]);
+        $referencepageid = (int)$DB->insert_record('icontent_pages', (object)[
+            'icontentid' => $module->id,
+            'cmid' => $cm->id,
+            'submissionid' => 0,
+            'title' => 'Reference page',
+            'pageicontent' => 'Reference content',
+            'pageicontentformat' => FORMAT_HTML,
+            'pagenum' => 1,
+            'timecreated' => $now,
+            'timemodified' => $now,
+        ]);
+        $submissionpageid = (int)$DB->insert_record('icontent_pages', (object)[
+            'icontentid' => $module->id,
+            'cmid' => $cm->id,
+            'submissionid' => $submissionid,
+            'title' => 'Student page',
+            'pageicontent' => 'Student content',
+            'pageicontentformat' => FORMAT_HTML,
+            'pagenum' => 1,
+            'timecreated' => $now,
+            'timemodified' => $now,
+        ]);
+        $context = \context_module::instance($cm->id);
+        $approved = new approved_contextlist($user, 'mod_icontent', [$context->id]);
+
+        provider::delete_data_for_user($approved);
+
+        $this->assertFalse($DB->record_exists('icontent_submissions', ['id' => $submissionid]));
+        $this->assertFalse($DB->record_exists('icontent_pages', ['id' => $submissionpageid]));
+        $this->assertTrue($DB->record_exists('icontent_pages', ['id' => $referencepageid]));
+    }
+
+    /**
      * Create one iContent activity with one page and one page-question mapping.
      *
      * @return array

@@ -37,6 +37,58 @@ use context_module;
  */
 class icontent_note_options {
     /**
+     * Restrict assignment-mode note queries to pages visible to the current user.
+     *
+     * @param int $cmid
+     * @param string $joinfilter
+     * @param string $andfilter
+     * @param array $params
+     * @return void
+     */
+    private static function add_assignment_page_visibility_filter(
+        int $cmid,
+        string &$joinfilter,
+        string &$andfilter,
+        array &$params
+    ): void {
+        global $DB, $USER;
+
+        $cm = get_coursemodule_from_id('icontent', $cmid, 0, false, IGNORE_MISSING);
+        if (!$cm) {
+            return;
+        }
+        $icontent = $DB->get_record('icontent', ['id' => $cm->instance], 'id, assignmentmode');
+        if (!$icontent || empty($icontent->assignmentmode)) {
+            return;
+        }
+
+        $context = context_module::instance($cmid);
+        if (has_any_capability(['mod/icontent:edit', 'mod/icontent:manage', 'mod/icontent:grade'], $context)) {
+            return;
+        }
+
+        $joinfilter .= ' INNER JOIN {icontent_pages} ip ON ip.id = pn.pageid ';
+        $andfilter .= "AND (ip.submissionid = 0 OR EXISTS (
+            SELECT 1
+              FROM {icontent_submissions} s
+             WHERE s.id = ip.submissionid
+               AND (
+                   s.userid = ?
+                   OR EXISTS (
+                       SELECT 1 FROM {groups_members} gm WHERE gm.groupid = s.groupid AND gm.userid = ?
+                   )
+                   OR (
+                       s.status IN (?, ?)
+                       AND EXISTS (
+                           SELECT 1 FROM {icontent} i WHERE i.id = s.icontentid AND i.publicsubmissions = 1
+                       )
+                   )
+               )
+        )) ";
+        array_push($params, (int)$USER->id, (int)$USER->id, 'submitted', 'graded');
+    }
+
+    /**
      * Remove notes from a page. If the param $pagenoteid was passed, It will delete only the current note and their daughters.
      *
      * Returns boolean true or false.
@@ -113,6 +165,7 @@ class icontent_note_options {
         // Filter.
         $andfilter = '';
         $joinfilter = '';
+        $joinparams = [];
         $distinct = '';
         $arrayfilter = [$cmid];
         if ($private) {
@@ -134,9 +187,11 @@ class icontent_note_options {
         }
         if ($likes) {
             $joinfilter .= 'INNER JOIN {icontent_pages_notes_like} pnl ON pn.id = pnl.pagenoteid';
+            $joinparams[] = $USER->id;
             $andfilter .= 'AND pnl.userid = ? ';
             array_push($arrayfilter, $USER->id);
         }
+        self::add_assignment_page_visibility_filter($cmid, $joinfilter, $andfilter, $arrayfilter);
         // Query.
         $sql = "SELECT Count(*) AS total
                   FROM {icontent_pages_notes} pn
@@ -145,7 +200,7 @@ class icontent_note_options {
                        {$joinfilter}
                  WHERE pn.cmid = ?
                        {$andfilter};";
-        $notes = $DB->get_record_sql($sql, $arrayfilter);
+        $notes = $DB->get_record_sql($sql, array_merge($joinparams, $arrayfilter));
         return $notes->total;
     }
 
@@ -187,6 +242,7 @@ class icontent_note_options {
         // Filter.
         $andfilter = '';
         $joinfilter = '';
+        $joinparams = [];
         $distinct = '';
         $arrayfilter = [$cmid];
         if ($private) {
@@ -212,9 +268,11 @@ class icontent_note_options {
         }
         if ($likes) {
             $joinfilter .= 'INNER JOIN {icontent_pages_notes_like} pnl ON pn.id = pnl.pagenoteid';
+            $joinparams[] = $USER->id;
             $andfilter .= 'AND pnl.userid = ? ';
             array_push($arrayfilter, $USER->id);
         }
+        self::add_assignment_page_visibility_filter($cmid, $joinfilter, $andfilter, $arrayfilter);
         // Setup pagination - when both $page and $perpage = 0, get all results.
         if ($page || $perpage) {
             if ($page < 0) {
@@ -247,6 +305,6 @@ class icontent_note_options {
                  WHERE pn.cmid = ?
                        {$andfilter}
               ORDER BY {$sortparams}";
-        return $DB->get_records_sql($sql, $arrayfilter, $page * $perpage, $perpage);
+        return $DB->get_records_sql($sql, array_merge($joinparams, $arrayfilter), $page * $perpage, $perpage);
     }
 }

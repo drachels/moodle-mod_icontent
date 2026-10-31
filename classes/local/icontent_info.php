@@ -52,19 +52,22 @@ class icontent_info {
      * Please note the icontent/text of pages is not included.
      *
      * @param object $icontent
+     * @param int $submissionid
      * @return array of id=>icontent
      */
-    public static function icontent_preload_pages($icontent) {
+    public static function icontent_preload_pages($icontent, int $submissionid = 0) {
         global $DB;
         $pages = $DB->get_records(
             'icontent_pages',
             [
                 'icontentid' => $icontent->id,
+                'submissionid' => $submissionid,
             ],
             'pagenum',
             'id,
             icontentid,
             cmid,
+            submissionid,
             pagenum,
             coverpage,
             title,

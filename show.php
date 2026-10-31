@@ -43,6 +43,9 @@ require_capability('mod/icontent:edit', $context);
 $PAGE->set_url('/mod/icontent/show.php', ['id' => $id, 'pageid' => $pageid]);
 
 $page = $DB->get_record('icontent_pages', ['id' => $pageid, 'icontentid' => $icontent->id], '*', MUST_EXIST);
+if (!\mod_icontent\local\assignment::can_view_page($page, $icontent, $cm, $context, (int)$USER->id)) {
+    throw new required_capability_exception($context, 'mod/icontent:view', 'nopermissions', '');
+}
 
 // Switch hidden state.
 $page->hidden = $page->hidden ? 0 : 1;
@@ -51,5 +54,8 @@ $page->hidden = $page->hidden ? 0 : 1;
 $DB->update_record('icontent_pages', $page);
 
 icontent_info::icontent_preload_pages($icontent); // Fix structure.
-$url = new moodle_url('/mod/icontent/view.php', ['id' => $cm->id]);
+$url = new moodle_url('/mod/icontent/view.php', [
+    'id' => $cm->id,
+    'submissionid' => (int)$page->submissionid,
+]);
 redirect($url);

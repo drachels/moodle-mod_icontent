@@ -51,6 +51,25 @@ $capabilities = [
         ],
     ],
 
+    'mod/icontent:rate' => [
+        'captype' => 'write',
+        'contextlevel' => CONTEXT_MODULE,
+        'archetypes' => [
+            'teacher' => CAP_ALLOW,
+            'editingteacher' => CAP_ALLOW,
+            'manager' => CAP_ALLOW,
+        ],
+    ],
+
+    'mod/icontent:submit' => [
+        'riskbitmask' => RISK_SPAM | RISK_PERSONAL,
+        'captype' => 'write',
+        'contextlevel' => CONTEXT_MODULE,
+        'archetypes' => [
+            'student' => CAP_ALLOW,
+        ],
+    ],
+
     // Grade essay questions.
     'mod/icontent:grade' => [
         'riskbitmask' => RISK_SPAM | RISK_XSS,

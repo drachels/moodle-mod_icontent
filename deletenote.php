@@ -39,6 +39,17 @@ require_login($course, false, $cm);
 require_sesskey();
 
 $context = context_module::instance($cm->id);
+if ((int)$pagenote->cmid !== (int)$cm->id) {
+    throw new invalid_parameter_exception('Note does not belong to this iContent activity');
+}
+$page = $DB->get_record('icontent_pages', [
+    'id' => $pagenote->pageid,
+    'icontentid' => $icontent->id,
+    'cmid' => $cm->id,
+], 'id, submissionid', MUST_EXIST);
+if (!\mod_icontent\local\assignment::can_view_page($page, $icontent, $cm, $context, (int)$USER->id)) {
+    throw new required_capability_exception($context, 'mod/icontent:view', 'nopermissions', '');
+}
 icontent_user_can_remove_note($pagenote, $context);
 
 $PAGE->set_url('/mod/icontent/deletenote.php', ['id' => $id, 'pnid' => $pnid]);

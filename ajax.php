@@ -22,6 +22,8 @@
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+use mod_icontent\local\assignment;
+
 require_once("../../config.php");
 require_once('lib.php');
 
@@ -47,6 +49,17 @@ if ($id) {
 require_sesskey();
 $context = context_module::instance($cm->id);
 require_login($course, true, $cm);
+$requirepageaccess = static function(int $pageid) use ($DB, $cm, $icontent, $context, $USER): \stdClass {
+    $page = $DB->get_record('icontent_pages', [
+        'id' => $pageid,
+        'cmid' => $cm->id,
+        'icontentid' => $icontent->id,
+    ], '*', MUST_EXIST);
+    if (!assignment::can_view_page($page, $icontent, $cm, $context, (int)$USER->id)) {
+        throw new required_capability_exception($context, 'mod/icontent:view', 'nopermissions', '');
+    }
+    return $page;
+};
 
 $pageurlparams = ['id' => $cm->id, 'action' => $action];
 $pageidparam = optional_param('pageid', 0, PARAM_INT);
@@ -61,12 +74,43 @@ switch ($action) {
         require_capability('mod/icontent:view', $context);
         $pagenum = required_param('pagenum', PARAM_INT);
         $sourcepageid = optional_param('sourcepageid', 0, PARAM_INT);
-        $return = icontent_ajax_getpage($pagenum, $icontent, $context, $sourcepageid);
+        $submissionid = 0;
+        if (!empty($icontent->assignmentmode)) {
+            if ($sourcepageid) {
+                $sourcepage = $DB->get_record('icontent_pages', [
+                    'id' => $sourcepageid,
+                    'cmid' => $cm->id,
+                    'icontentid' => $icontent->id,
+                ], '*', MUST_EXIST);
+                if (!assignment::can_view_page($sourcepage, $icontent, $cm, $context, (int)$USER->id)) {
+                    throw new required_capability_exception($context, 'mod/icontent:view', 'nopermissions', '');
+                }
+                $submissionid = (int)$sourcepage->submissionid;
+            } else if (has_capability('mod/icontent:submit', $context) &&
+                !has_any_capability(['mod/icontent:edit', 'mod/icontent:manage', 'mod/icontent:grade'], $context)) {
+                $requestsubmissionid = optional_param('submissionid', 0, PARAM_INT);
+                if ($requestsubmissionid) {
+                    $requestedsubmission = assignment::get_submission((int)$icontent->id, $requestsubmissionid);
+                    if (!$requestedsubmission || !assignment::can_view_submission(
+                        $requestedsubmission,
+                        $icontent,
+                        $cm,
+                        $context,
+                        (int)$USER->id
+                    )) {
+                        throw new required_capability_exception($context, 'mod/icontent:view', 'nopermissions', '');
+                    }
+                    $submissionid = (int)$requestedsubmission->id;
+                }
+            }
+        }
+        $return = icontent_ajax_getpage($pagenum, $icontent, $context, $sourcepageid, $submissionid);
         break;
         // Save and return records table {pages_notes}.
     case 'savereturnpagenotes':
         require_capability('mod/icontent:viewnotes', $context);
         $pageid = required_param('pageid', PARAM_INT);
+        $requirepageaccess($pageid);
         $note = new stdClass();
         $note->comment = required_param('comment', PARAM_CLEANHTML);
         $note->cmid = required_param('id', PARAM_INT);
@@ -85,9 +129,10 @@ switch ($action) {
         $targetnote = $DB->get_record(
             'icontent_pages_notes',
             ['id' => $notelike->pagenoteid, 'cmid' => $notelike->cmid],
-            'doubttutor',
+            'doubttutor, pageid',
             MUST_EXIST
         );
+        $requirepageaccess((int)$targetnote->pageid);
         if ($targetnote->doubttutor && !has_any_capability(['mod/icontent:edit', 'mod/icontent:manage'], $context)) {
             throw new moodle_exception('nopermissions', 'error');
         }
@@ -99,6 +144,11 @@ switch ($action) {
         $pagenote->id = required_param('pagenoteid', PARAM_INT);
         $pagenote->cmid = required_param('id', PARAM_INT);
         $pagenote->comment = required_param('comment', PARAM_CLEANHTML);
+        $targetnote = $DB->get_record('icontent_pages_notes', [
+            'id' => $pagenote->id,
+            'cmid' => $cm->id,
+        ], 'pageid', MUST_EXIST);
+        $requirepageaccess((int)$targetnote->pageid);
         $return = icontent_ajax_editnote($pagenote, $icontent);
         break;
     case 'replynote':
@@ -107,11 +157,18 @@ switch ($action) {
         $pagenote->parent = required_param('parent', PARAM_INT);
         $pagenote->cmid = required_param('id', PARAM_INT);
         $pagenote->comment = required_param('comment', PARAM_CLEANHTML);
+        $targetnote = $DB->get_record('icontent_pages_notes', [
+            'id' => $pagenote->parent,
+            'cmid' => $cm->id,
+        ], 'pageid', MUST_EXIST);
+        $requirepageaccess((int)$targetnote->pageid);
         $return = icontent_ajax_replynote($pagenote, $icontent);
         break;
     case 'saveattempt':
         require_capability('mod/icontent:view', $context);
         $formdata = required_param('formdata', PARAM_RAW);
+        parse_str($formdata, $attemptdata);
+        $requirepageaccess((int)($attemptdata['pageid'] ?? 0));
         $return = icontent_ajax_saveattempt($formdata, $cm, $icontent);
         break;
 }

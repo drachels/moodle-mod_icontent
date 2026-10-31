@@ -44,6 +44,9 @@ require_capability('mod/icontent:edit', $context);
 $PAGE->set_url('/mod/icontent/delete.php', ['id' => $id, 'pageid' => $pageid]);
 
 $page = $DB->get_record('icontent_pages', ['id' => $pageid, 'icontentid' => $icontent->id], '*', MUST_EXIST);
+if (!\mod_icontent\local\assignment::can_view_page($page, $icontent, $cm, $context, (int)$USER->id)) {
+    throw new required_capability_exception($context, 'mod/icontent:view', 'nopermissions', '');
+}
 
 // Header and strings.
 $PAGE->set_title($icontent->name);
@@ -67,12 +70,16 @@ if ($confirm) {
     }
     $DB->delete_records('icontent_pages_questions', ['pageid' => $page->id]);
     icontent_note_options::icontent_remove_notes($page->id); // Remove notes and notes like.
+    \core_tag_tag::remove_all_item_tags('mod_icontent', 'icontent_pages', (int)$page->id);
     $DB->delete_records('icontent_pages', ['id' => $page->id]);
-    icontent_info::icontent_preload_pages($icontent); // Fix structure.
+    icontent_info::icontent_preload_pages($icontent, (int)$page->submissionid); // Fix structure.
     // Event log.
     \mod_icontent\event\page_deleted::create_from_page($icontent, $context, $page)->trigger();
     // Make URL.
-    $url = new moodle_url('/mod/icontent/view.php', ['id' => $cm->id]);
+    $url = new moodle_url('/mod/icontent/view.php', [
+        'id' => $cm->id,
+        'submissionid' => (int)$page->submissionid,
+    ]);
     redirect($url);
 }
 

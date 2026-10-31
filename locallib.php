@@ -1626,8 +1626,8 @@ function icontent_duplicate_page($icontentid, $cmid, $sourcepageid, context_modu
 
     $nextpages = $DB->get_records_select(
         'icontent_pages',
-        'icontentid = ? AND cmid = ? AND pagenum > ?',
-        [(int)$icontentid, (int)$cmid, (int)$sourcepage->pagenum],
+        'icontentid = ? AND cmid = ? AND submissionid = ? AND pagenum > ?',
+        [(int)$icontentid, (int)$cmid, (int)$sourcepage->submissionid, (int)$sourcepage->pagenum],
         'pagenum DESC',
         'id, pagenum'
     );
@@ -1720,7 +1720,7 @@ function icontent_update_question_attempts($attempt) {
  * @param int $startwithpage
  * @return string with $pgbuttons
  */
-function icontent_full_paging_button_bar($pages, $cmid, $startwithpage = 1) {
+function icontent_full_paging_button_bar($pages, $cmid, $startwithpage = 1, int $submissionid = 0) {
     if (empty($pages)) {
         return false;
     }
@@ -1730,6 +1730,7 @@ function icontent_full_paging_button_bar($pages, $cmid, $startwithpage = 1) {
     $objbutton->title = get_string('previouspage', 'mod_icontent');
     $objbutton->cmid = $cmid;
     $objbutton->startwithpage = $startwithpage;
+    $objbutton->submissionid = $submissionid;
     // Create buttons!
     $npage = 0;
     $tpages = count($pages);
@@ -1773,13 +1774,20 @@ function icontent_full_paging_button_bar($pages, $cmid, $startwithpage = 1) {
  * @param string $attrid
  * @return string with $controlbuttons
  */
-function icontent_simple_paging_button_bar($pages, $cmid, $startwithpage = 1, $attrid = 'fgroup_id_buttonar') {
+function icontent_simple_paging_button_bar(
+    $pages,
+    $cmid,
+    $startwithpage = 1,
+    $attrid = 'fgroup_id_buttonar',
+    int $submissionid = 0
+) {
     // Object button.
     $objbutton = new stdClass();
     $objbutton->name  = get_string('previous', 'mod_icontent');
     $objbutton->title = get_string('previouspage', 'mod_icontent');
     $objbutton->cmid  = $cmid;
     $objbutton->startwithpage = $startwithpage;
+    $objbutton->submissionid = $submissionid;
     // Go back.
     $controlbuttons = icontent_make_button_previous_page(
         $objbutton,
@@ -1819,8 +1827,11 @@ function icontent_simple_paging_button_bar($pages, $cmid, $startwithpage = 1, $a
  * @param object $context
  * @return array of id=>icontent
  */
-function icontent_get_startpagenum($icontent, $context) {
+function icontent_get_startpagenum($icontent, $context, int $submissionid = 0) {
     global $DB;
+    if ($submissionid > 0) {
+        return icontent_get_minpagenum($icontent, $submissionid);
+    }
     if (has_any_capability(['mod/icontent:edit', 'mod/icontent:manage'], $context)) {
         return icontent_get_minpagenum($icontent);
     }
@@ -1865,11 +1876,12 @@ function icontent_get_startpagenum($icontent, $context) {
  * @param object $icontent
  * @return array of id=>icontent
  */
-function icontent_get_minpagenum($icontent) {
+function icontent_get_minpagenum($icontent, int $submissionid = 0) {
     global $DB;
     // Get object.
-    $sql = "SELECT Min(pagenum) AS minpagenum FROM {icontent_pages} WHERE icontentid = ? AND hidden = ?;";
-     $objpage = $DB->get_record_sql($sql, [$icontent->id, 0]);
+    $sql = "SELECT Min(pagenum) AS minpagenum FROM {icontent_pages}
+             WHERE icontentid = ? AND submissionid = ? AND hidden = ?";
+    $objpage = $DB->get_record_sql($sql, [$icontent->id, $submissionid, 0]);
      // Return min page.
     return $objpage->minpagenum;
 }
@@ -1911,7 +1923,7 @@ function icontent_get_navigation_source_pageid(stdClass $objpage) {
  * @param int $cmid
  * @return stdClass|false
  */
-function icontent_get_visible_page_by_id($pageid, $cmid) {
+function icontent_get_visible_page_by_id($pageid, $cmid, int $submissionid = 0) {
     global $DB;
 
     if (empty($pageid) || empty($cmid)) {
@@ -1920,8 +1932,8 @@ function icontent_get_visible_page_by_id($pageid, $cmid) {
 
     return $DB->get_record(
         'icontent_pages',
-        ['id' => $pageid, 'cmid' => $cmid, 'hidden' => 0],
-        'id, cmid, pagenum, branchref, branchname, branchparentpageid'
+        ['id' => $pageid, 'cmid' => $cmid, 'submissionid' => $submissionid, 'hidden' => 0],
+        'id, cmid, submissionid, pagenum, branchref, branchname, branchparentpageid'
     );
 }
 
@@ -1932,17 +1944,18 @@ function icontent_get_visible_page_by_id($pageid, $cmid) {
  * @param int $pagenum
  * @return int
  */
-function icontent_get_previous_mainline_pagenum($cmid, $pagenum) {
+function icontent_get_previous_mainline_pagenum($cmid, $pagenum, int $submissionid = 0) {
     global $DB;
 
     $page = $DB->get_record_sql(
         "SELECT max(pagenum) AS previous
            FROM {icontent_pages}
           WHERE cmid = ?
-            AND hidden = ?
+             AND submissionid = ?
+             AND hidden = ?
             AND branchparentpageid = ?
             AND pagenum < ?;",
-        [(int)$cmid, 0, 0, (int)$pagenum]
+        [(int)$cmid, $submissionid, 0, 0, (int)$pagenum]
     );
 
     return (int)($page->previous ?? 0);
@@ -1955,17 +1968,18 @@ function icontent_get_previous_mainline_pagenum($cmid, $pagenum) {
  * @param int $pagenum
  * @return int
  */
-function icontent_get_next_mainline_pagenum($cmid, $pagenum) {
+function icontent_get_next_mainline_pagenum($cmid, $pagenum, int $submissionid = 0) {
     global $DB;
 
     $page = $DB->get_record_sql(
         "SELECT min(pagenum) AS next
            FROM {icontent_pages}
           WHERE cmid = ?
-            AND hidden = ?
+             AND submissionid = ?
+             AND hidden = ?
             AND branchparentpageid = ?
             AND pagenum > ?;",
-        [(int)$cmid, 0, 0, (int)$pagenum]
+        [(int)$cmid, $submissionid, 0, 0, (int)$pagenum]
     );
 
     return (int)($page->next ?? 0);
@@ -1988,9 +2002,14 @@ function icontent_get_cluster_pages(stdClass $objpage) {
     if (strpos($clusterkey, 'clusterpage-') === 0) {
         return $DB->get_records(
             'icontent_pages',
-            ['id' => (int)$objpage->id, 'cmid' => (int)$objpage->cmid, 'hidden' => 0],
+            [
+                'id' => (int)$objpage->id,
+                'cmid' => (int)$objpage->cmid,
+                'submissionid' => (int)($objpage->submissionid ?? 0),
+                'hidden' => 0,
+            ],
             'pagenum',
-            'id, cmid, pagenum, branchref, branchname, branchparentpageid'
+            'id, cmid, submissionid, pagenum, branchref, branchname, branchparentpageid'
         );
     }
 
@@ -1998,12 +2017,13 @@ function icontent_get_cluster_pages(stdClass $objpage) {
         'icontent_pages',
         [
             'cmid' => (int)$objpage->cmid,
+            'submissionid' => (int)($objpage->submissionid ?? 0),
             'hidden' => 0,
             'branchparentpageid' => (int)$objpage->branchparentpageid,
             'branchref' => $clusterkey,
         ],
         'pagenum',
-        'id, cmid, pagenum, branchref, branchname, branchparentpageid'
+        'id, cmid, submissionid, pagenum, branchref, branchname, branchparentpageid'
     );
 }
 
@@ -2057,7 +2077,12 @@ function icontent_get_navigation_page_context(stdClass $objpage) {
     if (!empty($objpage->id) && !empty($objpage->cmid)) {
         $fullpage = $DB->get_record(
             'icontent_pages',
-            ['id' => (int)$objpage->id, 'cmid' => (int)$objpage->cmid, 'hidden' => 0],
+            [
+                'id' => (int)$objpage->id,
+                'cmid' => (int)$objpage->cmid,
+                'submissionid' => (int)($objpage->submissionid ?? 0),
+                'hidden' => 0,
+            ],
             '*'
         );
         if ($fullpage) {
@@ -2068,7 +2093,12 @@ function icontent_get_navigation_page_context(stdClass $objpage) {
     if (!empty($objpage->pagenum) && !empty($objpage->cmid)) {
         $fullpage = $DB->get_record(
             'icontent_pages',
-            ['cmid' => (int)$objpage->cmid, 'pagenum' => (int)$objpage->pagenum, 'hidden' => 0],
+            [
+                'cmid' => (int)$objpage->cmid,
+                'submissionid' => (int)($objpage->submissionid ?? 0),
+                'pagenum' => (int)$objpage->pagenum,
+                'hidden' => 0,
+            ],
             '*'
         );
         if ($fullpage) {
@@ -2086,8 +2116,8 @@ function icontent_get_navigation_page_context(stdClass $objpage) {
  * @param int $pageid
  * @return int
  */
-function icontent_get_custom_navigation_pagenum($cmid, $pageid) {
-    $targetpage = icontent_get_visible_page_by_id((int)$pageid, (int)$cmid);
+function icontent_get_custom_navigation_pagenum($cmid, $pageid, int $submissionid = 0) {
+    $targetpage = icontent_get_visible_page_by_id((int)$pageid, (int)$cmid, $submissionid);
     if (empty($targetpage->pagenum)) {
         return 0;
     }
@@ -2199,25 +2229,30 @@ function icontent_record_page_navigation($sourcepageid, $targetpageid, $cmid) {
  */
 function icontent_get_prev_pagenum(stdClass $objpage) {
     $objpage = icontent_get_navigation_page_context($objpage);
+    $submissionid = (int)($objpage->submissionid ?? 0);
     $prevmode = (int)($objpage->prevmode ?? 0);
     if ($prevmode === 1) {
         return 0;
     }
     if ($prevmode === 2) {
-        $customprevious = icontent_get_custom_navigation_pagenum((int)$objpage->cmid, (int)($objpage->prevpageid ?? 0));
+        $customprevious = icontent_get_custom_navigation_pagenum(
+            (int)$objpage->cmid,
+            (int)($objpage->prevpageid ?? 0),
+            $submissionid
+        );
         if (!empty($customprevious)) {
             return $customprevious;
         }
     }
 
-    $firstpagenum = icontent_get_min_visible_pagenum_by_cmid((int)$objpage->cmid);
+    $firstpagenum = icontent_get_min_visible_pagenum_by_cmid((int)$objpage->cmid, $submissionid);
     if (!empty($firstpagenum) && (int)$objpage->pagenum <= (int)$firstpagenum) {
         return 0;
     }
 
     $trackedpageid = icontent_get_navigation_source_pageid($objpage);
     if (!empty($trackedpageid)) {
-        $trackedpage = icontent_get_visible_page_by_id($trackedpageid, $objpage->cmid);
+        $trackedpage = icontent_get_visible_page_by_id($trackedpageid, $objpage->cmid, $submissionid);
         if (!empty($trackedpage->pagenum)) {
             return (int)$trackedpage->pagenum;
         }
@@ -2229,13 +2264,13 @@ function icontent_get_prev_pagenum(stdClass $objpage) {
             return $clusterprevious;
         }
 
-        $parentpage = icontent_get_visible_page_by_id((int)$objpage->branchparentpageid, $objpage->cmid);
+        $parentpage = icontent_get_visible_page_by_id((int)$objpage->branchparentpageid, $objpage->cmid, $submissionid);
         if (!empty($parentpage->pagenum)) {
             return (int)$parentpage->pagenum;
         }
     }
 
-    return icontent_get_previous_mainline_pagenum($objpage->cmid, $objpage->pagenum);
+    return icontent_get_previous_mainline_pagenum($objpage->cmid, $objpage->pagenum, $submissionid);
 }
 
 /**
@@ -2248,25 +2283,30 @@ function icontent_get_prev_pagenum(stdClass $objpage) {
  */
 function icontent_get_next_pagenum(stdClass $objpage) {
     $objpage = icontent_get_navigation_page_context($objpage);
+    $submissionid = (int)($objpage->submissionid ?? 0);
     $nextmode = (int)($objpage->nextmode ?? 0);
     if ($nextmode === 1) {
         return 0;
     }
     if ($nextmode === 2) {
-        $customnext = icontent_get_custom_navigation_pagenum((int)$objpage->cmid, (int)($objpage->nextpageid ?? 0));
+        $customnext = icontent_get_custom_navigation_pagenum(
+            (int)$objpage->cmid,
+            (int)($objpage->nextpageid ?? 0),
+            $submissionid
+        );
         if (!empty($customnext)) {
             return $customnext;
         }
     }
 
-    $lastpagenum = icontent_get_max_visible_pagenum_by_cmid((int)$objpage->cmid);
+    $lastpagenum = icontent_get_max_visible_pagenum_by_cmid((int)$objpage->cmid, $submissionid);
     if (!empty($lastpagenum) && (int)$objpage->pagenum >= (int)$lastpagenum) {
         return 0;
     }
 
     $routedpageid = icontent_get_question_routed_next_pageid($objpage);
     if (!empty($routedpageid)) {
-        $routedpage = icontent_get_visible_page_by_id($routedpageid, $objpage->cmid);
+        $routedpage = icontent_get_visible_page_by_id($routedpageid, $objpage->cmid, $submissionid);
         if (!empty($routedpage->pagenum)) {
             return (int)$routedpage->pagenum;
         }
@@ -2278,13 +2318,13 @@ function icontent_get_next_pagenum(stdClass $objpage) {
             return $clusternext;
         }
 
-        $parentpage = icontent_get_visible_page_by_id((int)$objpage->branchparentpageid, $objpage->cmid);
+        $parentpage = icontent_get_visible_page_by_id((int)$objpage->branchparentpageid, $objpage->cmid, $submissionid);
         if (!empty($parentpage->pagenum)) {
-            return icontent_get_next_mainline_pagenum($objpage->cmid, $parentpage->pagenum);
+            return icontent_get_next_mainline_pagenum($objpage->cmid, $parentpage->pagenum, $submissionid);
         }
     }
 
-    return icontent_get_next_mainline_pagenum($objpage->cmid, $objpage->pagenum);
+    return icontent_get_next_mainline_pagenum($objpage->cmid, $objpage->pagenum, $submissionid);
 }
 
 /**
@@ -2294,14 +2334,18 @@ function icontent_get_next_pagenum(stdClass $objpage) {
  * @param int $pagenum
  * @return int|null
  */
-function icontent_get_pageid_by_pagenum($cmid, $pagenum) {
+function icontent_get_pageid_by_pagenum($cmid, $pagenum, int $submissionid = 0) {
     global $DB;
 
     if (empty($pagenum)) {
         return null;
     }
 
-    return $DB->get_field('icontent_pages', 'id', ['cmid' => $cmid, 'pagenum' => $pagenum, 'hidden' => 0]) ?: null;
+    return $DB->get_field(
+        'icontent_pages',
+        'id',
+        ['cmid' => $cmid, 'submissionid' => $submissionid, 'pagenum' => $pagenum, 'hidden' => 0]
+    ) ?: null;
 }
 
 /**
@@ -2310,15 +2354,16 @@ function icontent_get_pageid_by_pagenum($cmid, $pagenum) {
  * @param int $cmid
  * @return int
  */
-function icontent_get_min_visible_pagenum_by_cmid($cmid) {
+function icontent_get_min_visible_pagenum_by_cmid($cmid, int $submissionid = 0) {
     global $DB;
 
     $page = $DB->get_record_sql(
         "SELECT min(pagenum) AS minpagenum
            FROM {icontent_pages}
           WHERE cmid = ?
-            AND hidden = ?",
-        [(int)$cmid, 0]
+             AND submissionid = ?
+             AND hidden = ?",
+        [(int)$cmid, $submissionid, 0]
     );
 
     return (int)($page->minpagenum ?? 0);
@@ -2330,15 +2375,16 @@ function icontent_get_min_visible_pagenum_by_cmid($cmid) {
  * @param int $cmid
  * @return int
  */
-function icontent_get_max_visible_pagenum_by_cmid($cmid) {
+function icontent_get_max_visible_pagenum_by_cmid($cmid, int $submissionid = 0) {
     global $DB;
 
     $page = $DB->get_record_sql(
         "SELECT max(pagenum) AS maxpagenum
            FROM {icontent_pages}
           WHERE cmid = ?
-            AND hidden = ?",
-        [(int)$cmid, 0]
+             AND submissionid = ?
+             AND hidden = ?",
+        [(int)$cmid, $submissionid, 0]
     );
 
     return (int)($page->maxpagenum ?? 0);
@@ -5297,13 +5343,18 @@ function icontent_make_button_previous_page($button, $tpages, $icon = null) {
     $objpage = new stdClass();
     $objpage->pagenum = $button->startwithpage;
     $objpage->cmid = $button->cmid;
-    $objpage->id = (int)icontent_get_pageid_by_pagenum($button->cmid, $button->startwithpage);
+    $objpage->submissionid = (int)($button->submissionid ?? 0);
+    $objpage->id = (int)icontent_get_pageid_by_pagenum(
+        $button->cmid,
+        $button->startwithpage,
+        $objpage->submissionid
+    );
     $objpage = icontent_get_navigation_page_context($objpage);
     if ((int)($objpage->prevmode ?? 0) === 1) {
         return '';
     }
     $pageprevious = icontent_get_prev_pagenum($objpage);
-    $pagepreviousid = icontent_get_pageid_by_pagenum($button->cmid, $pageprevious);
+    $pagepreviousid = icontent_get_pageid_by_pagenum($button->cmid, $pageprevious, $objpage->submissionid);
     $attributes = [
         'title' => $button->title,
         'class' => 'load-page btn-previous-page btn btn-secondary mr-1',
@@ -5342,13 +5393,18 @@ function icontent_make_button_next_page($button, $tpages, $icon = null) {
     $objpage = new stdClass();
     $objpage->pagenum = $button->startwithpage;
     $objpage->cmid = $button->cmid;
-    $objpage->id = (int)icontent_get_pageid_by_pagenum($button->cmid, $button->startwithpage);
+    $objpage->submissionid = (int)($button->submissionid ?? 0);
+    $objpage->id = (int)icontent_get_pageid_by_pagenum(
+        $button->cmid,
+        $button->startwithpage,
+        $objpage->submissionid
+    );
     $objpage = icontent_get_navigation_page_context($objpage);
     if ((int)($objpage->nextmode ?? 0) === 1) {
         return '';
     }
     $nextpage = icontent_get_next_pagenum($objpage);
-    $nextpageid = icontent_get_pageid_by_pagenum($button->cmid, $nextpage);
+    $nextpageid = icontent_get_pageid_by_pagenum($button->cmid, $nextpage, $objpage->submissionid);
     $attributes = [
         'title' => $button->title,
         'class' => 'load-page btn-next-page btn btn-secondary',
@@ -6912,11 +6968,15 @@ function icontent_make_cover_page($icontent, $objpage, $context) {
  * @param object $sourcepageid
  * @return object $fullpage
  */
-function icontent_get_fullpageicontent($pagenum, $icontent, $context, $sourcepageid = 0) {
+function icontent_get_fullpageicontent($pagenum, $icontent, $context, $sourcepageid = 0, int $submissionid = 0) {
     global $DB, $CFG;
 
     // Get page.
-    $objpage = $DB->get_record('icontent_pages', ['pagenum' => $pagenum, 'icontentid' => $icontent->id]);
+    $objpage = $DB->get_record('icontent_pages', [
+        'pagenum' => $pagenum,
+        'icontentid' => $icontent->id,
+        'submissionid' => $submissionid,
+    ]);
     if (!$objpage) {
         $objpage = new stdClass();
         $objpage->fullpageicontent = html_writer::div(
@@ -6934,8 +6994,8 @@ function icontent_get_fullpageicontent($pagenum, $icontent, $context, $sourcepag
         // Control button.
         $objpage->previous = icontent_get_prev_pagenum($objpage);
         $objpage->next = icontent_get_next_pagenum($objpage);
-        $objpage->previouspageid = icontent_get_pageid_by_pagenum($objpage->cmid, $objpage->previous);
-        $objpage->nextpageid = icontent_get_pageid_by_pagenum($objpage->cmid, $objpage->next);
+        $objpage->previouspageid = icontent_get_pageid_by_pagenum($objpage->cmid, $objpage->previous, $submissionid);
+        $objpage->nextpageid = icontent_get_pageid_by_pagenum($objpage->cmid, $objpage->next, $submissionid);
         icontent_record_page_navigation($sourcepageid, $objpage->id, $objpage->cmid);
         return $objpage;
     }
@@ -6970,7 +7030,7 @@ function icontent_get_fullpageicontent($pagenum, $icontent, $context, $sourcepag
         $objpage->pageicontent,
         $objpage->pageicontentformat,
         [
-            'noclean' => true,
+            'noclean' => empty($objpage->submissionid),
             'overflowdiv' => false,
             'context' => $context,
         ]
@@ -6998,8 +7058,8 @@ function icontent_get_fullpageicontent($pagenum, $icontent, $context, $sourcepag
     // Control button.
     $objpage->previous = icontent_get_prev_pagenum($objpage);
     $objpage->next = icontent_get_next_pagenum($objpage);
-    $objpage->previouspageid = icontent_get_pageid_by_pagenum($objpage->cmid, $objpage->previous);
-    $objpage->nextpageid = icontent_get_pageid_by_pagenum($objpage->cmid, $objpage->next);
+    $objpage->previouspageid = icontent_get_pageid_by_pagenum($objpage->cmid, $objpage->previous, $submissionid);
+    $objpage->nextpageid = icontent_get_pageid_by_pagenum($objpage->cmid, $objpage->next, $submissionid);
     // Content page for return.
     $objpage->fullpageicontent = html_writer::tag(
         'div',

@@ -243,6 +243,12 @@ class restore_icontent_activity_structure_step extends restore_questions_activit
             'icontent',
             '/activity/icontent'
         );
+        if ($userinfo) {
+            $paths[] = new restore_path_element(
+                'icontent_submission',
+                '/activity/icontent/submissions/submission'
+            );
+        }
         $paths[] = new restore_path_element(
             'icontent_page',
             '/activity/icontent/pages/page'
@@ -307,6 +313,7 @@ class restore_icontent_activity_structure_step extends restore_questions_activit
 
         $data->timeopen = $this->apply_date_offset($data->timeopen);
         $data->timeclose = $this->apply_date_offset($data->timeclose);
+        $data->duedate = $this->apply_date_offset($data->duedate ?? 0);
 
         if ($data->grade < 0) {
             // Scale found, get mapping.
@@ -330,6 +337,13 @@ class restore_icontent_activity_structure_step extends restore_questions_activit
         $data = (object)$data;
         $oldid = $data->id;
         $oldpagenum = isset($data->pagenum) ? (int)$data->pagenum : 0;
+        $oldsubmissionid = (int)($data->submissionid ?? 0);
+        $data->submissionid = $oldsubmissionid
+            ? (int)$this->get_mappingid('icontent_submission', $oldsubmissionid)
+            : 0;
+        if ($oldsubmissionid && !$data->submissionid) {
+            return;
+        }
         $data->cmid = $this->get_restored_cmid();
         $data->icontentid = $this->get_new_parentid('icontent');
         $data->timecreated = $this->apply_date_offset($data->timecreated);
@@ -344,6 +358,34 @@ class restore_icontent_activity_structure_step extends restore_questions_activit
     }
 
     /**
+     * Restore an iContent assignment submission.
+     *
+     * @param array|object $data
+     * @return void
+     */
+    protected function process_icontent_submission($data) {
+        global $DB;
+
+        $data = (object)$data;
+        $oldid = (int)$data->id;
+        $data->icontentid = $this->get_new_parentid('icontent');
+        $oldgroupid = (int)$data->groupid;
+        $data->userid = !empty($data->userid) ? $this->map_userid_with_fallback($data->userid) : 0;
+        $data->groupid = $oldgroupid ? (int)$this->get_mappingid('group', $oldgroupid) : 0;
+        if ($oldgroupid && !$data->groupid) {
+            return;
+        }
+        $data->grader = !empty($data->grader) ? $this->map_userid_with_fallback($data->grader) : 0;
+        $data->timecreated = $this->apply_date_offset($data->timecreated);
+        $data->timemodified = $this->apply_date_offset($data->timemodified);
+        $data->timesubmitted = $this->apply_date_offset($data->timesubmitted);
+        $data->timegraded = $this->apply_date_offset($data->timegraded);
+
+        $newid = $DB->insert_record('icontent_submissions', $data);
+        $this->set_mapping('icontent_submission', $oldid, $newid);
+    }
+
+    /**
      * Restore an icontent_page_question.
      * @param array|object $data
      * @throws dml_exception
@@ -354,6 +396,9 @@ class restore_icontent_activity_structure_step extends restore_questions_activit
 
         $data = (object)$data;
         $oldid = $data->id;
+        if (!$this->get_new_parentid('icontent_page')) {
+            return;
+        }
         $expectedqtype = trim((string)($data->qtype ?? ''));
         if ($expectedqtype === '' || $expectedqtype === '0') {
             $expectedqtype = null;
@@ -411,7 +456,7 @@ class restore_icontent_activity_structure_step extends restore_questions_activit
 
         $data = (object)$data;
         $tag = trim((string)$data->rawname);
-        if ($tag === '') {
+        if ($tag === '' || !$this->get_new_parentid('icontent_page')) {
             return;
         }
 
@@ -433,6 +478,9 @@ class restore_icontent_activity_structure_step extends restore_questions_activit
         $oldid = $data->id;
 
         $data->pageid = $this->get_new_parentid('icontent_page');
+        if (!$data->pageid) {
+            return;
+        }
         $data->userid = $this->map_userid_with_fallback($data->userid);
         $data->cmid = $this->get_restored_cmid();
         $data->timecreated = $this->apply_date_offset($data->timecreated);
@@ -453,6 +501,10 @@ class restore_icontent_activity_structure_step extends restore_questions_activit
 
         $data = (object)$data;
         $oldid = $data->id;
+
+        if (!$this->get_new_parentid('icontent_page_note')) {
+            return;
+        }
 
         $data->pagenoteid = $this->get_new_parentid('icontent_page_note');
         $data->userid = $this->map_userid_with_fallback($data->userid);
@@ -476,6 +528,9 @@ class restore_icontent_activity_structure_step extends restore_questions_activit
         $oldid = $data->id;
 
         $data->pageid = $this->get_new_parentid('icontent_page');
+        if (!$data->pageid) {
+            return;
+        }
         $data->cmid = $this->get_restored_cmid();
         $data->userid = $this->map_userid_with_fallback($data->userid);
         $data->timecreated = $this->apply_date_offset($data->timecreated);

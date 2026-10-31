@@ -33,12 +33,20 @@ $confirm = optional_param('confirm', 0, PARAM_BOOL);
 $cm = get_coursemodule_from_id('icontent', $id, 0, false, MUST_EXIST);
 $course = $DB->get_record('course', ['id' => $cm->course], '*', MUST_EXIST);
 $icontent = $DB->get_record('icontent', ['id' => $cm->instance], '*', MUST_EXIST);
-$page = $DB->get_record('icontent_pages', ['id' => $pageid], 'id, pagenum, title', MUST_EXIST);
+$page = $DB->get_record(
+    'icontent_pages',
+    ['id' => $pageid, 'icontentid' => $cm->instance, 'cmid' => $cm->id],
+    'id, pagenum, title, submissionid',
+    MUST_EXIST
+);
 // Check auth.
 require_login($course, false, $cm);
 require_sesskey();
 $context = context_module::instance($cm->id);
 require_capability('mod/icontent:answerquestionstryagain', $context);
+if (!\mod_icontent\local\assignment::can_view_page($page, $icontent, $cm, $context, (int)$USER->id)) {
+    throw new required_capability_exception($context, 'mod/icontent:view', 'nopermissions', '');
+}
 // Page setting.
 $PAGE->set_url('/mod/icontent/deleteattempt.php', ['id' => $cm->id, 'pageid' => $pageid, 'sesskey' => sesskey()]);
 // Header and strings.

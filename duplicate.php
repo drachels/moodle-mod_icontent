@@ -41,10 +41,22 @@ require_sesskey();
 
 $context = context_module::instance($cm->id);
 require_capability('mod/icontent:edit', $context);
+$sourcepage = $DB->get_record('icontent_pages', [
+    'id' => $pageid,
+    'icontentid' => $icontent->id,
+    'cmid' => $cm->id,
+], '*', MUST_EXIST);
+if (!\mod_icontent\local\assignment::can_view_page($sourcepage, $icontent, $cm, $context, (int)$USER->id)) {
+    throw new required_capability_exception($context, 'mod/icontent:view', 'nopermissions', '');
+}
 $createdpage = icontent_duplicate_page((int)$icontent->id, (int)$cm->id, (int)$pageid, $context);
 
-icontent_info::icontent_preload_pages($icontent);
+icontent_info::icontent_preload_pages($icontent, (int)$createdpage->submissionid);
 \mod_icontent\event\page_created::create_from_page($icontent, $context, $createdpage)->trigger();
 
-$url = new moodle_url('/mod/icontent/view.php', ['id' => $cm->id, 'pageid' => (int)$createdpage->id]);
+$url = new moodle_url('/mod/icontent/view.php', [
+    'id' => $cm->id,
+    'pageid' => (int)$createdpage->id,
+    'submissionid' => (int)$createdpage->submissionid,
+]);
 redirect($url, get_string('msgsucessduplicate', 'mod_icontent'));

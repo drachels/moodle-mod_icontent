@@ -103,6 +103,7 @@ class icontent_pages_edit_form extends moodleform {
             [
                 'icontentid' => (int)$page->icontentid,
                 'cmid' => (int)$page->cmid,
+                'submissionid' => (int)($page->submissionid ?? 0),
                 'hidden' => 0,
                 'branchparentpageid' => 0,
             ],
@@ -127,6 +128,7 @@ class icontent_pages_edit_form extends moodleform {
             [
                 'icontentid' => (int)$page->icontentid,
                 'cmid' => (int)$page->cmid,
+                'submissionid' => (int)($page->submissionid ?? 0),
                 'hidden' => 0,
             ],
             'pagenum ASC',
