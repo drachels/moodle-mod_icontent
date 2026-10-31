@@ -51,10 +51,7 @@ Upgrade.txt working notes:
 20260715 iContent_1518 - Feature Request - Can SEB be used with Content pages that have questions? 
 20260809 iContent_1528 - Feature Request - Investigate adding audio capability to pages
     and questions.
-20260901 iContent_1539 - Feature Request - Import Presentations with each slide
-    being a new page.
-    2026090401 Might refer to this plugin https://marketplace.moodle.com/plugins/4084 that imports
-        Power Point presentations to the Book resource.
+
 20261031 iContent_1577 - iContent - Feature Request - Need to be able to define/use scoring rubrics.
 
 
@@ -66,6 +63,28 @@ Upgrade.txt working notes:
     2024011101 Got all these debug messages when I was doing a MooTyper upgrade, and the new
        Grade Me stuff popped up, and I stupidly checked the box asking me if I wanted to display
        any Content Pages essays that needed grading. Went back and turned it off for now.
+20260901 iContent_1539 - Feature Request - Import Presentations with each slide
+    being a new page.
+    2026090401 Might refer to this plugin https://marketplace.moodle.com/plugins/4084 that imports
+        Power Point presentations to the Book resource.
+    2026103118 - Import .pptx, .ppt, .odp and legacy .sxi presentations as editable pages,
+        appending one page per slide without replacing existing content.
+    2026103119 - Let teachers import reference pages and individual/group members import into
+        editable drafts; keep imports and embedded images isolated to the target page set.
+    2026103120 - Add upload controls and dedicated Linux LibreOffice/Bubblewrap service setup for isolated,
+        no-network conversion, with time, file, package and slide-count limits.
+    2026103121 - Preserve text, lists, tables, basic inline formatting and embedded raster images;
+        explain layout/media limitations and report unsupported or empty content.
+    2026103122 - Verify real conversion of all four formats, append order, embedded images,
+        group permissions and the Moodle upload form with PHPUnit integration tests.
+    2026103123 - Validate exact slide/package limits and web-account sandbox conversion;
+        full iContent regression suite has 39 tests and 233 assertions (existing warnings remain).
+    2026103124 - Move conversion out of PHP-FPM into a dedicated per-site worker, preserving
+        SELinux confinement and Bubblewrap isolation without granting httpd namespace privileges.
+    2026103125 - Use private atomic file jobs, a worker heartbeat, explicit timeout/failure reporting,
+        and administrator enablement; document persistent service setup in cli/presentation_worker.txt.
+    2026103126 - Verify conversion through SELinux-confined PHP-FPM and test worker failure cleanup
+        and source-symlink rejection; full suite has 41 tests and 250 assertions (existing warnings remain).
 20261018  iContent_1572b - Feature Request - Need to be able to show/hide branches in a TOC.
     2026101801 Branch labels now expand/collapse their page lists using keyboard-accessible native
         disclosure controls. Initially only the current page's branch is open; AJAX page
@@ -75,6 +94,26 @@ Upgrade.txt working notes:
     Branches into an assignment.
     2026103100 Added standalone individual/group page-set assignments with due dates, final
         submission, teacher grading, and optional visibility to course participants.
+    2026103105 - Keep teacher reference pages shared and student/group page sets isolated across
+        display, navigation, AJAX and file access.
+    2026103106 - Add assignment backup/restore with user data, privacy export/erasure, and activity
+        deletion/reset cleanup.
+    2026103107 - Require group mode for group assignments and apply group visibility checks to
+        submission viewing and management.
+    2026103108 - Resolve submission ownership when staff edit a page directly; allow all eligible
+        group members to edit their draft.
+    2026103109 - Add draft-page Duplicate and Edit toolbar icons and limited TOC Up/Down, Edit and
+        Duplicate controls.
+    2026103110 - Append new pages by default, honor Add after, and keep duplication/reordering
+        within the same page set.
+    2026103111 - Resume reference pages independently of submission history, excluding hidden
+        pages after submission or grading.
+    2026103112 - Reopen submitted/graded projects as private editable drafts while retaining
+        group/individual grades and feedback.
+    2026103113 - Grant individual/group deadline extensions; use effective deadlines for late
+     status without overriding availability.
+    2026103114 - Validate assignment changes with 32 PHPUnit tests and 177 assertions; existing
+        parser warnings/deprecations remain.
 20261031 iContent_1576 - iContent - Feature Request - Need an optional non-contribution
     penalty for group members.
     2026103101 Added optional group participation review using Moodle page creation/edit logs,
@@ -89,6 +128,12 @@ Upgrade.txt working notes:
     2026103104 Teachers can return submitted/graded page sets to private editable drafts while
         retaining grades and feedback, and grant individual/group due-date extensions.
         Late submissions remain accepted; extensions do not override activity availability.
+    2026103115 - Count logged page creations/edits through final submission; preserve new
+        deleted-page evidence in event submission IDs.
+    2026103116 - Validate individual numeric/scale grades and reject outsiders, blank
+        selected grades, and locked/overridden gradebook entries.
+    2026103117 - Show students their own grade separately from the group grade and respect
+        gradebook hiding for individual grades.
 
 
 === 3.0.1 === (Build: 2026100300)

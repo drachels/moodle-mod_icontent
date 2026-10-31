@@ -428,6 +428,19 @@ if (!empty($icontent->assignmentmode)) {
     echo html_writer::end_div();
 }
 
+if (\mod_icontent\local\presentation_importer::is_available() && (
+    (!$submissionid && $allowedit) ||
+    ($submission && assignment::can_edit_page(
+        (object)['submissionid' => $submissionid], $icontent, $cm, $context, (int)$USER->id
+    ))
+)) {
+    echo $OUTPUT->single_button(
+        new moodle_url('/mod/icontent/import_presentation.php', ['id' => $cm->id, 'submissionid' => $submissionid]),
+        get_string('importpresentation', 'icontent'),
+        'get'
+    );
+}
+
 // Check whether this icontent is open.
 if ($timenow > $timestart) {
     // This echo gets render before the top of the slide. It prints on every slide.

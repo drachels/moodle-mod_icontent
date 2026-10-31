@@ -358,6 +358,14 @@ $renderer->icontent_requires_css();
 echo $OUTPUT->header();
 echo $OUTPUT->heading($icontent->name);
 
+if (empty($page->id) && \mod_icontent\local\presentation_importer::is_available()) {
+    echo $OUTPUT->single_button(
+        new moodle_url('/mod/icontent/import_presentation.php', ['id' => $cm->id, 'submissionid' => $submissionid]),
+        get_string('importpresentation', 'icontent'),
+        'get'
+    );
+}
+
 $mform->display();
 
 echo $OUTPUT->footer();

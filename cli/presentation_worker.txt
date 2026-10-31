@@ -1,0 +1,59 @@
+Presentation conversion worker
+==============================
+
+Install one worker per Moodle site on Linux, running as the web-service user.
+Keep SELinux enforcing: do not launch conversion from PHP-FPM, grant namespace
+privileges to httpd_t, disable Bubblewrap, or change namespace sysctls to bypass
+web-service restrictions.
+
+The worker uses a private file queue instead of a network/listening socket.
+PHP publishes jobs atomically beneath:
+    $CFG->tempdir/icontent-presentations
+The worker runs one LibreOffice conversion at a time, always inside Bubblewrap
+with a private profile, no network and read-only system mounts. It reads neither
+Moodle configuration nor the database. Use the same paths in the service and
+Moodle; the default temp directory is $CFG->dataroot/temp. Directory access must
+be restricted to the web-service user and labeled for Moodle temporary writes.
+
+Example systemd unit (replace paths for your site):
+
+[Unit]
+Description=Moodle iContent presentation conversion worker
+After=local-fs.target
+
+[Service]
+Type=simple
+User=apache
+Group=apache
+UMask=0077
+ExecStart=/usr/bin/php /path/to/moodle/public/mod/icontent/cli/presentation_worker.php --workdir=/path/to/moodledata/temp/icontent-presentations --autoload=/path/to/moodle/vendor/autoload.php --office=/usr/bin/libreoffice --sandbox=/usr/bin/bwrap
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/path/to/moodledata/temp/icontent-presentations
+KillMode=control-group
+TimeoutStopSec=10
+TasksMax=128
+MemoryMax=1G
+
+[Install]
+WantedBy=multi-user.target
+
+Create the work directory first (owner apache, permissions 0700), install the
+unit under /etc/systemd/system, reload systemd, and enable/start the service.
+On other servers, replace apache with the web-service account. The executable
+paths must be visible under /usr (or its usual /lib and /lib64 library paths)
+inside the sandbox. Keep this script and vendor dependencies administrator-owned.
+On Moodle releases without public/, adjust the script and vendor paths.
+
+Verify service startup, its SELinux process context and an actual import through
+the browser before enabling imports for students. The worker must not inherit
+httpd_t. Check journalctl for the service and SELinux audit logs if it fails.
+In Plugins > Activity modules > Content Pages, enable presentation imports.
+The worker heartbeat gates the Import presentation button. Stopped/busy workers
+produce explicit errors, never an unsandboxed fallback. Restart the worker after
+updating its code or executable paths. Back up this host's unit separately from
+the plugin; it is site-specific and should not be copied unchanged to another site.

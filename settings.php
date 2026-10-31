@@ -26,6 +26,12 @@ defined('MOODLE_INTERNAL') || die;
 use mod_icontent\local\keyboards;
 
 if ($ADMIN->fulltree) {
+    $settings->add(new admin_setting_configcheckbox(
+        'mod_icontent/presentationworker',
+        get_string('presentationworker', 'icontent'),
+        get_string('presentationworker_desc', 'icontent'),
+        0
+    ));
     // Changed to this format 03/10/2019.
     require_once(__DIR__ . '/lib.php');
     require_once(dirname(__FILE__) . '/locallib.php');
