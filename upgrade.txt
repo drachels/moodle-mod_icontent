@@ -82,6 +82,13 @@ Upgrade.txt working notes:
         not automatically deduct marks. Individual grades survive subsequent grading reviews.
     2026103102 Fixed reference-page resume lookup to exclude submission pages and hidden pages,
         including after a group submission has been graded.
+    2026103103 Draft submission members can reorder pages using TOC Up/Down controls and
+        use Edit/ Duplicate icons. New pages append by default; Add after inserts directly
+        after its source without duplicate page numbers. Reordering stays within the page set.
+        Appearance uses native HTML color inputs for all roles; popup layout depends on browser.
+    2026103104 Teachers can return submitted/graded page sets to private editable drafts while
+        retaining grades and feedback, and grant individual/group due-date extensions.
+        Late submissions remain accepted; extensions do not override activity availability.
 
 
 === 3.0.1 === (Build: 2026100300)

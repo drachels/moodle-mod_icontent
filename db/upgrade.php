@@ -474,5 +474,14 @@ function xmldb_icontent_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026103101, 'icontent');
     }
 
+    if ($oldversion < 2026103102) {
+        $table = new xmldb_table('icontent_submissions');
+        $field = new xmldb_field('extensionduedate', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', 'timegraded');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        upgrade_mod_savepoint(true, 2026103102, 'icontent');
+    }
+
     return true;
 }

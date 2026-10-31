@@ -109,9 +109,10 @@ foreach ($submissions as $submission) {
             : ($submission->status === assignment::STATUS_GRADED
                 ? get_string('submissiongraded', 'icontent')
                 : get_string('submissionsubmitted', 'icontent')));
-    if ($submission->status === assignment::STATUS_DRAFT && $icontent->duedate && time() > $icontent->duedate) {
+    $duedate = assignment::get_due_date($icontent, $submission);
+    if ($submission->status === assignment::STATUS_DRAFT && $duedate && time() > $duedate) {
         $status .= ' (' . get_string('submissionlate', 'icontent') . ')';
-    } else if ($submission->timesubmitted && $icontent->duedate && $submission->timesubmitted > $icontent->duedate) {
+    } else if ($submission->timesubmitted && $duedate && $submission->timesubmitted > $duedate) {
         $status .= ' (' . get_string('submissionlate', 'icontent') . ')';
     }
 
@@ -128,12 +129,18 @@ foreach ($submissions as $submission) {
         get_string('viewassignmentpages', 'icontent')
     );
     if (!$publicview && $cangrade) {
+        if ($submission->status !== assignment::STATUS_DRAFT) {
+            $actions .= ' ' . html_writer::link(
+                new moodle_url('/mod/icontent/grade_submission.php', [
+                    'id' => $cm->id,
+                    'submissionid' => $submission->id,
+                ]),
+                get_string('gradeassignment', 'icontent')
+            );
+        }
         $actions .= ' ' . html_writer::link(
-            new moodle_url('/mod/icontent/grade_submission.php', [
-                'id' => $cm->id,
-                'submissionid' => $submission->id,
-            ]),
-            get_string('gradeassignment', 'icontent')
+            new moodle_url('/mod/icontent/manage_submission.php', ['id' => $cm->id, 'submissionid' => $submission->id]),
+            get_string('managesubmission', 'icontent')
         );
     }
 

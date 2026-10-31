@@ -22,137 +22,21 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-require(dirname(__FILE__) . '/../../config.php');
-require_once(dirname(__FILE__) . '/locallib.php');
+require(__DIR__ . '/../../config.php');
+require_once(__DIR__ . '/locallib.php');
 
-$id = required_param('id', PARAM_INT); // Course Module ID.
-$pageid = required_param('pageid', PARAM_INT); // Page ID.
+$id = required_param('id', PARAM_INT);
+$pageid = required_param('pageid', PARAM_INT);
 $up = optional_param('up', 0, PARAM_BOOL);
 
 $cm = get_coursemodule_from_id('icontent', $id, 0, false, MUST_EXIST);
 $course = $DB->get_record('course', ['id' => $cm->course], '*', MUST_EXIST);
 $icontent = $DB->get_record('icontent', ['id' => $cm->instance], '*', MUST_EXIST);
-
 require_login($course, false, $cm);
 require_sesskey();
 
 $context = context_module::instance($cm->id);
-require_capability('mod/icontent:edit', $context);
-
-$page = $DB->get_record('icontent_pages', ['id' => $pageid, 'icontentid' => $icontent->id], '*', MUST_EXIST);
-if (!\mod_icontent\local\assignment::can_view_page($page, $icontent, $cm, $context, (int)$USER->id)) {
-    throw new required_capability_exception($context, 'mod/icontent:view', 'nopermissions', '');
-}
-
-$oldpages = $DB->get_records('icontent_pages', [
-    'icontentid' => $icontent->id,
-    'submissionid' => (int)$page->submissionid,
-], 'pagenum', 'id, pagenum');
-
-$nothing = 0;
-
-$pages = [];
-$pgs = 0;
-$pge = 0;
-$ts = 0;
-$te = 0;
-// Create new ordered array and find pages to be moved.
-$i = 1;
-$found = 0;
-foreach ($oldpages as $pg) {
-    $pages[$i] = $pg;
-    if ($page->id == $pg->id) {
-        $pgs = $i;
-        $pge = $pgs;
-    } else if ($pgs) {
-        if (!$found) {
-            $found = 1;
-        }
-    }
-    $i++;
-}
-
-// Find target page(s).
-// Moving page and looking for next/previous page.
-if ($up) { // Up.
-    if ($pgs == 1) {
-        $nothing = 1; // Already first.
-    } else {
-        $te = $pgs - 1;
-        for ($i = $pgs - 1; $i >= 1; $i--) {
-            $ts = $i;
-            break;
-        }
-    }
-} else { // Down.
-    if ($pge == count($pages)) {
-        $nothing = 1; // Already last.
-    } else {
-        $ts = $pge + 1;
-        $found = 0;
-        for ($i = $pge + 1; $i <= count($pages); $i++) {
-            if ($found) {
-                break;
-            } else {
-                $te = $i;
-                $found = 1;
-            }
-        }
-    }
-}
-
-// Recreated newly sorted list of pages.
-if (!$nothing) {
-    $newpages = [];
-
-    if ($up) {
-        if ($ts > 1) {
-            for ($i = 1; $i < $ts; $i++) {
-                $newpages[] = $pages[$i];
-            }
-        }
-        for ($i = $pgs; $i <= $pge; $i++) {
-            $newpages[$i] = $pages[$i];
-        }
-        for ($i = $ts; $i <= $te; $i++) {
-            $newpages[$i] = $pages[$i];
-        }
-        if ($pge < count($pages)) {
-            for ($i = $pge; $i <= count($pages); $i++) {
-                $newpages[$i] = $pages[$i];
-            }
-        }
-    } else {
-        if ($pgs > 1) {
-            for ($i = 1; $i < $pgs; $i++) {
-                $newpages[] = $pages[$i];
-            }
-        }
-        for ($i = $ts; $i <= $te; $i++) {
-            $newpages[$i] = $pages[$i];
-        }
-        for ($i = $pgs; $i <= $pge; $i++) {
-            $newpages[$i] = $pages[$i];
-        }
-        if ($te < count($pages)) {
-            for ($i = $te; $i <= count($pages); $i++) {
-                $newpages[$i] = $pages[$i];
-            }
-        }
-    }
-
-    // Store pages in the new order.
-    $i = 1;
-    foreach ($newpages as $pg) {
-        $pg->pagenum = $i;
-        $DB->update_record('icontent_pages', $pg);
-        $pg = $DB->get_record('icontent_pages', ['id' => $pg->id]);
-
-        \mod_icontent\event\page_updated::create_from_page($icontent, $context, $pg)->trigger();
-
-        $i++;
-    }
-}
+$page = icontent_move_page($pageid, (bool)$up, $icontent, $cm, $context);
 
 redirect(new moodle_url('/mod/icontent/view.php', [
     'id' => $cm->id,

@@ -380,6 +380,7 @@ class restore_icontent_activity_structure_step extends restore_questions_activit
         $data->timemodified = $this->apply_date_offset($data->timemodified);
         $data->timesubmitted = $this->apply_date_offset($data->timesubmitted);
         $data->timegraded = $this->apply_date_offset($data->timegraded);
+        $data->extensionduedate = $this->apply_date_offset($data->extensionduedate ?? 0);
 
         $newid = $DB->insert_record('icontent_submissions', $data);
         $this->set_mapping('icontent_submission', $oldid, $newid);

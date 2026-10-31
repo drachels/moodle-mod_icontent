@@ -137,7 +137,8 @@ $page->submissionid = $submissionid;
 
 // Mirror view.php TOC behavior while editing so page navigation remains available.
 $pages = icontent_info::icontent_preload_pages($icontent, $submissionid);
-$currenttocpage = !empty($page->pagenum) ? (int)$page->pagenum : icontent_get_startpagenum($icontent, $context);
+$currenttocpage = !empty($page->pagenum)
+    ? (int)$page->pagenum : icontent_get_startpagenum($icontent, $context, $submissionid);
 if (!empty($pages)) {
     icontent_add_fake_block($pages, $currenttocpage, $icontent, $cm, !$isassignmentstudent);
 }
@@ -303,6 +304,13 @@ if ($mform->is_cancelled()) {
             'submissionid' => $submissionid,
         ]), get_string('msgsucess', 'icontent'));
     } else {
+        $transaction = $DB->start_delegated_transaction();
+        $data->pagenum = icontent_reserve_page_position(
+            (int)$icontent->id,
+            (int)$cm->id,
+            $submissionid,
+            (int)$data->pagenum
+        );
         $data->pageicontent = ''; // Updated later.
         $data->pageicontentformat = FORMAT_HTML; // Updated later.
         $data->id = $DB->insert_record('icontent_pages', $data);
@@ -333,6 +341,7 @@ if ($mform->is_cancelled()) {
         $page = $DB->get_record('icontent_pages', ['id' => $data->id]);
         // Set log.
         \mod_icontent\event\page_created::create_from_page($icontent, $context, $page)->trigger();
+        $transaction->allow_commit();
         redirect(new moodle_url('/mod/icontent/view.php', [
             'id' => $cm->id,
             'pageid' => $data->id,

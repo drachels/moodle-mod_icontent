@@ -38,6 +38,10 @@ require_once($CFG->dirroot . '/mod/icontent/locallib.php');
  * @covers ::icontent_get_prev_pagenum
  * @covers ::icontent_duplicate_page
  * @covers ::icontent_get_startpagenum
+ * @covers ::icontent_move_page
+ * @covers ::icontent_reserve_page_position
+ * @covers ::icontent_make_toolbar
+ * @covers ::icontent_get_toc
  */
 final class locallib_test extends \advanced_testcase {
     public function setUp(): void {
@@ -302,6 +306,114 @@ final class locallib_test extends \advanced_testcase {
 
         $DB->set_field('icontent_pages', 'hidden', 1, ['id' => $referenceid]);
         $this->assertSame(1, (int)\icontent_get_startpagenum($icontent, $context));
+    }
+
+    /**
+     * New pages append, while explicit Add after inserts into only the chosen page set.
+     */
+    public function test_new_page_positions_append_or_insert_after(): void {
+        global $DB;
+        [$course, $module, $icontent, $student] = $this->create_activity_fixture();
+        $firstid = $this->create_page($icontent->id, $module->cmid, 1, 'First', ['submissionid' => 10]);
+        $secondid = $this->create_page($icontent->id, $module->cmid, 2, 'Second', ['submissionid' => 10]);
+        $referenceid = $this->create_page($icontent->id, $module->cmid, 2, 'Reference');
+        $position = \icontent_reserve_page_position((int)$icontent->id, (int)$module->cmid, 10, 0);
+        $thirdid = $this->create_page($icontent->id, $module->cmid, $position, 'Third', ['submissionid' => 10]);
+        $this->assertSame(3, $position);
+        $position = \icontent_reserve_page_position((int)$icontent->id, (int)$module->cmid, 10, 1);
+        $insertedid = $this->create_page($icontent->id, $module->cmid, $position, 'Inserted', ['submissionid' => 10]);
+        $ids = array_keys($DB->get_records('icontent_pages', [
+            'icontentid' => $icontent->id, 'submissionid' => 10,
+        ], 'pagenum, id', 'id'));
+        $this->assertSame([$firstid, $insertedid, $secondid, $thirdid], $ids);
+        $this->assertSame(2, (int)$DB->get_field('icontent_pages', 'pagenum', ['id' => $referenceid]));
+    }
+
+    /**
+     * Draft group members can move pages and see only authorized TOC/toolbar actions.
+     */
+    public function test_group_members_can_reorder_and_edit_draft_pages(): void {
+        global $DB;
+        [$course, $module, $icontent, $student] = $this->create_activity_fixture();
+        $peer = $this->getDataGenerator()->create_user();
+        $outsider = $this->getDataGenerator()->create_user();
+        foreach ([$peer, $outsider] as $user) {
+            $this->getDataGenerator()->enrol_user($user->id, $course->id, 'student');
+        }
+        $icontent->assignmentmode = 1;
+        $icontent->teamsubmission = 1;
+        $DB->update_record('icontent', $icontent);
+        $cm = get_coursemodule_from_id('icontent', $module->cmid, 0, false, MUST_EXIST);
+        $cm->groupmode = VISIBLEGROUPS;
+        $DB->set_field('course_modules', 'groupmode', VISIBLEGROUPS, ['id' => $cm->id]);
+        $groupid = groups_create_group((object)['courseid' => $course->id, 'name' => 'Draft authors']);
+        groups_add_member($groupid, $student->id);
+        groups_add_member($groupid, $peer->id);
+        $this->setUser($student);
+        $submission = \mod_icontent\local\assignment::get_current_submission($icontent, $cm, (int)$student->id);
+        $firstid = $this->create_page($icontent->id, $cm->id, 1, 'First', ['submissionid' => $submission->id]);
+        $secondid = $this->create_page($icontent->id, $cm->id, 2, 'Second', ['submissionid' => $submission->id]);
+        $referenceid = $this->create_page($icontent->id, $cm->id, 1, 'Reference');
+        $context = \context_module::instance($cm->id);
+        $this->setUser($peer);
+        $pages = \mod_icontent\local\icontent_info::icontent_preload_pages($icontent, (int)$submission->id);
+        $toolbar = \icontent_make_toolbar($pages[$firstid], $icontent);
+        $this->assertStringContainsString('icon-update', $toolbar);
+        $this->assertStringContainsString('icon-duplicatepage', $toolbar);
+        $toc = \icontent_get_toc($pages, $pages[$firstid], $icontent, $cm, false);
+        $this->assertStringContainsString('move.php', $toc);
+        $this->assertStringContainsString('edit.php', $toc);
+        $this->assertStringNotContainsString('delete.php', $toc);
+        $this->assertStringNotContainsString('show.php', $toc);
+        $this->assertSame(2, (int)\icontent_move_page($firstid, false, $icontent, $cm, $context)->pagenum);
+        $this->assertSame(1, (int)$DB->get_field('icontent_pages', 'pagenum', ['id' => $secondid]));
+        $this->assertSame(1, (int)$DB->get_field('icontent_pages', 'pagenum', ['id' => $referenceid]));
+        $this->assertSame(1, (int)\icontent_move_page($firstid, true, $icontent, $cm, $context)->pagenum);
+        $this->assertSame(1, (int)\icontent_move_page($firstid, true, $icontent, $cm, $context)->pagenum);
+        $this->assertSame(2, (int)\icontent_move_page($secondid, false, $icontent, $cm, $context)->pagenum);
+        $this->setUser($outsider);
+        $this->assertStringNotContainsString('move.php', \icontent_get_toc($pages, $pages[$firstid], $icontent, $cm, false));
+        $this->assertStringNotContainsString('icon-update', \icontent_make_toolbar($pages[$firstid], $icontent));
+        $this->expectException(\required_capability_exception::class);
+        \icontent_move_page($firstid, false, $icontent, $cm, $context);
+    }
+
+    /**
+     * Submitted and graded page sets cannot be reordered by students.
+     */
+    public function test_locked_submission_has_no_authoring_actions(): void {
+        global $DB;
+        [$course, $module, $icontent, $student] = $this->create_activity_fixture();
+        $icontent->assignmentmode = 1;
+        $DB->update_record('icontent', $icontent);
+        $cm = get_coursemodule_from_id('icontent', $module->cmid, 0, false, MUST_EXIST);
+        $context = \context_module::instance($cm->id);
+        $this->setUser($student);
+        $submission = \mod_icontent\local\assignment::get_current_submission($icontent, $cm, (int)$student->id);
+        $pageid = $this->create_page($icontent->id, $cm->id, 1, 'Draft', ['submissionid' => $submission->id]);
+        $pages = \mod_icontent\local\icontent_info::icontent_preload_pages($icontent, (int)$submission->id);
+        foreach (['submitted', 'graded'] as $status) {
+            $DB->set_field('icontent_submissions', 'status', $status, ['id' => $submission->id]);
+            $this->assertStringNotContainsString('move.php', \icontent_get_toc($pages, $pages[$pageid], $icontent, $cm, false));
+            $toolbar = \icontent_make_toolbar($pages[$pageid], $icontent);
+            $this->assertStringNotContainsString('icon-update', $toolbar);
+            $this->assertStringNotContainsString('icon-duplicatepage', $toolbar);
+        }
+        $this->expectException(\required_capability_exception::class);
+        \icontent_move_page($pageid, true, $icontent, $cm, $context);
+    }
+
+    /**
+     * Students cannot reorder shared reference pages.
+     */
+    public function test_students_cannot_move_reference_pages(): void {
+        [$course, $module, $icontent, $student] = $this->create_activity_fixture();
+        $this->setUser($student);
+        $icontent->assignmentmode = 1;
+        $pageid = $this->create_page($icontent->id, $module->cmid, 1, 'Reference');
+        $cm = get_coursemodule_from_id('icontent', $module->cmid, 0, false, MUST_EXIST);
+        $this->expectException(\required_capability_exception::class);
+        \icontent_move_page($pageid, true, $icontent, $cm, \context_module::instance($cm->id));
     }
 
     /**

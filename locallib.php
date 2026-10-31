@@ -883,8 +883,12 @@ function icontent_should_show_toc_menu(stdClass $icontent, stdClass $cm, $edit =
  * @param bool $edit
  */
 function icontent_add_fake_block($pages, $page, $icontent, $cm, $edit) {
-    global $OUTPUT, $PAGE;
-    if (!icontent_should_show_toc_menu($icontent, $cm, $edit)) {
+    global $OUTPUT, $PAGE, $USER;
+    $firstpage = reset($pages);
+    $submissionedit = $firstpage && \mod_icontent\local\assignment::can_edit_page(
+        $firstpage, $icontent, $cm, context_module::instance($cm->id), (int)$USER->id
+    );
+    if (!icontent_should_show_toc_menu($icontent, $cm, $edit) && !$submissionedit) {
         return;
     }
 
@@ -1006,9 +1010,10 @@ function icontent_render_toc_page_link(stdClass $page, context_module $context, 
  * @param stdClass $cm
  * @param int $position
  * @param int $pagecount
+ * @param bool $submissiononly Limit draft submission actions to move, edit and duplicate.
  * @return string
  */
-function icontent_render_toc_action_list(stdClass $page, stdClass $cm, $position, $pagecount) {
+function icontent_render_toc_action_list(stdClass $page, stdClass $cm, $position, $pagecount, bool $submissiononly = false) {
     global $OUTPUT, $USER;
 
     $actions = html_writer::start_tag('div', ['class' => 'action-list']);
@@ -1068,6 +1073,9 @@ function icontent_render_toc_action_list(stdClass $page, stdClass $cm, $position
         $OUTPUT->pix_icon('t/copy', get_string('duplicatepage', 'mod_icontent')),
         ['title' => get_string('duplicatepage', 'mod_icontent')]
     );
+    if ($submissiononly) {
+        return $actions . html_writer::end_tag('div');
+    }
     $actions .= html_writer::link(
         new moodle_url(
             'delete.php',
@@ -1136,6 +1144,7 @@ function icontent_render_toc_action_list(stdClass $page, stdClass $cm, $position
  * @param int $position
  * @param int $pagecount
  * @param array $classes
+ * @param bool $submissionedit Show limited actions for an editable submission.
  * @return string
  */
 function icontent_render_toc_item(
@@ -1146,13 +1155,14 @@ function icontent_render_toc_item(
     $edit,
     $position,
     $pagecount,
-    array $classes = []
+    array $classes = [],
+    bool $submissionedit = false
 ) {
     $classes[] = 'clearfix';
     $html = html_writer::start_tag('li', ['class' => implode(' ', array_unique($classes))]);
     $html .= icontent_render_toc_page_link($page, $context, $totalpages);
-    if ($edit) {
-        $html .= icontent_render_toc_action_list($page, $cm, $position, $pagecount);
+    if ($edit || $submissionedit) {
+        $html .= icontent_render_toc_action_list($page, $cm, $position, $pagecount, !$edit);
     }
     $html .= html_writer::end_tag('li');
 
@@ -1170,6 +1180,7 @@ function icontent_render_toc_item(
  * @return string
  */
 function icontent_get_toc($pages, $page, $icontent, $cm, $edit) {
+    global $USER;
     $context = context_module::instance($cm->id);
     $currentpagenum = is_object($page) ? (int)$page->pagenum : (int)$page;
     $tpages = count($pages);
@@ -1177,6 +1188,10 @@ function icontent_get_toc($pages, $page, $icontent, $cm, $edit) {
     foreach ($pages as $tocpage) {
         $pagesbyid[(int)$tocpage->id] = $tocpage;
     }
+    $positions = array_flip(array_keys($pagesbyid));
+    $firstpage = reset($pages);
+    $submissionedit = $firstpage &&
+        \mod_icontent\local\assignment::can_edit_page($firstpage, $icontent, $cm, $context, (int)$USER->id);
     $clusters = icontent_get_toc_clusters($pages);
     $toc = html_writer::start_tag('ul');
     $hasbranches = false;
@@ -1191,7 +1206,9 @@ function icontent_get_toc($pages, $page, $icontent, $cm, $edit) {
         }
 
         $position++;
-        $toc .= icontent_render_toc_item($pg, $context, $cm, $tpages, $edit, $position, $tpages);
+        $toc .= icontent_render_toc_item(
+            $pg, $context, $cm, $tpages, $edit, $positions[(int)$pg->id] + 1, $tpages, [], $submissionedit
+        );
 
         if (empty($clusters[(int)$pg->id])) {
             continue;
@@ -1216,9 +1233,10 @@ function icontent_get_toc($pages, $page, $icontent, $cm, $edit) {
                     $cm,
                     $tpages,
                     $edit,
-                    $position,
+                    $positions[(int)$clusterpage->id] + 1,
                     $tpages,
-                    ['cluster-page']
+                    ['cluster-page'],
+                    $submissionedit
                 );
             }
 
@@ -1600,6 +1618,90 @@ function icontent_get_page_bgimage($context, $page) {
 }
 
 /**
+ * Reserve a position after an existing page, or append when no position is specified.
+ *
+ * @param int $icontentid Activity id.
+ * @param int $cmid Course module id.
+ * @param int $submissionid Page set.
+ * @param int $afterpagenum Insert after this position; zero appends.
+ * @return int New page position.
+ */
+function icontent_reserve_page_position(int $icontentid, int $cmid, int $submissionid, int $afterpagenum): int {
+    global $DB;
+    $maximum = (int)$DB->get_field_sql(
+        'SELECT MAX(pagenum) FROM {icontent_pages} WHERE icontentid = ? AND cmid = ? AND submissionid = ?',
+        [$icontentid, $cmid, $submissionid]
+    );
+    if ($afterpagenum < 0 || $afterpagenum > $maximum) {
+        throw new invalid_parameter_exception('Invalid page insertion position');
+    }
+    if ($afterpagenum === 0) {
+        return $maximum + 1;
+    }
+    $nextpages = $DB->get_records_select(
+        'icontent_pages',
+        'icontentid = ? AND cmid = ? AND submissionid = ? AND pagenum > ?',
+        [$icontentid, $cmid, $submissionid, $afterpagenum],
+        'pagenum DESC, id DESC',
+        'id, pagenum'
+    );
+    foreach ($nextpages as $nextpage) {
+        $nextpage->pagenum = (int)$nextpage->pagenum + 1;
+        $DB->update_record('icontent_pages', $nextpage);
+    }
+    return $afterpagenum + 1;
+}
+
+/**
+ * Move a page one position within its authorized page set.
+ *
+ * @param int $pageid Page id.
+ * @param bool $up Move toward the start.
+ * @param stdClass $icontent Activity record.
+ * @param stdClass $cm Course module record.
+ * @param context_module $context Module context.
+ * @return stdClass Moved page.
+ */
+function icontent_move_page(int $pageid, bool $up, stdClass $icontent, stdClass $cm, context_module $context): stdClass {
+    global $DB, $USER;
+    $page = $DB->get_record('icontent_pages', [
+        'id' => $pageid,
+        'icontentid' => $icontent->id,
+        'cmid' => $cm->id,
+    ], '*', MUST_EXIST);
+    if (!\mod_icontent\local\assignment::can_view_page($page, $icontent, $cm, $context, (int)$USER->id)) {
+        throw new required_capability_exception($context, 'mod/icontent:view', 'nopermissions', '');
+    }
+    if (!has_capability('mod/icontent:edit', $context) &&
+        !\mod_icontent\local\assignment::can_edit_page($page, $icontent, $cm, $context, (int)$USER->id)) {
+        throw new required_capability_exception($context, 'mod/icontent:edit', 'nopermissions', '');
+    }
+    $transaction = $DB->start_delegated_transaction();
+    $pages = array_values($DB->get_records('icontent_pages', [
+        'icontentid' => $icontent->id,
+        'cmid' => $cm->id,
+        'submissionid' => (int)$page->submissionid,
+    ], 'pagenum, id'));
+    $position = array_search($pageid, array_map(static fn($pg) => (int)$pg->id, $pages), true);
+    if ($position === false) {
+        throw new invalid_parameter_exception('The page is no longer in the requested page set');
+    }
+    $target = $position + ($up ? -1 : 1);
+    if (isset($pages[$target])) {
+        [$pages[$position], $pages[$target]] = [$pages[$target], $pages[$position]];
+        foreach ($pages as $index => $pg) {
+            if ((int)$pg->pagenum !== $index + 1) {
+                $pg->pagenum = $index + 1;
+                $DB->update_record('icontent_pages', $pg);
+                \mod_icontent\event\page_updated::create_from_page($icontent, $context, $pg)->trigger();
+            }
+        }
+    }
+    $transaction->allow_commit();
+    return $DB->get_record('icontent_pages', ['id' => $pageid], '*', MUST_EXIST);
+}
+
+/**
  * Duplicate one iContent page and insert it directly after the source page.
  *
  * Branch settings are preserved. Navigation overrides are reset on the new page
@@ -1627,23 +1729,15 @@ function icontent_duplicate_page($icontentid, $cmid, $sourcepageid, context_modu
 
     $transaction = $DB->start_delegated_transaction();
 
-    $nextpages = $DB->get_records_select(
-        'icontent_pages',
-        'icontentid = ? AND cmid = ? AND submissionid = ? AND pagenum > ?',
-        [(int)$icontentid, (int)$cmid, (int)$sourcepage->submissionid, (int)$sourcepage->pagenum],
-        'pagenum DESC',
-        'id, pagenum'
+    $newposition = icontent_reserve_page_position(
+        (int)$icontentid, (int)$cmid, (int)$sourcepage->submissionid, (int)$sourcepage->pagenum
     );
-    foreach ($nextpages as $nextpage) {
-        $nextpage->pagenum = (int)$nextpage->pagenum + 1;
-        $DB->update_record('icontent_pages', $nextpage);
-    }
 
     $newpage = clone $sourcepage;
     unset($newpage->id);
 
     $newpage->title = get_string('duplicatepagesuffix', 'mod_icontent', $sourcepage->title);
-    $newpage->pagenum = (int)$sourcepage->pagenum + 1;
+    $newpage->pagenum = $newposition;
     $newpage->prevmode = 0;
     $newpage->prevpageid = 0;
     $newpage->nextmode = 1;
@@ -6788,6 +6882,20 @@ function icontent_make_toolbar($page, $icontent) {
             $submission &&
             \mod_icontent\local\assignment::can_edit_submission($submission, $context, (int)$USER->id)
         ) {
+            $update = html_writer::link(
+                new moodle_url('edit.php', [
+                    'cmid' => $page->cmid,
+                    'id' => $page->id,
+                    'submissionid' => (int)$page->submissionid,
+                ]),
+                '<i class="fa fa-pencil-square-o fa-lg"></i>',
+                [
+                    'title' => s(get_string('editcurrentpage', 'mod_icontent')),
+                    'class' => 'icon icon-update',
+                    'data-toggle' => 'tooltip',
+                    'data-placement' => 'top',
+                ]
+            );
             $duplicate = html_writer::link(
                 new moodle_url(
                     'duplicate.php',

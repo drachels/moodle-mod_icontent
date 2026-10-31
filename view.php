@@ -308,16 +308,17 @@ if (!empty($icontent->assignmentmode)) {
             }
 
             if ((int)$ownsubmission->id === $submissionid) {
+                $duedate = assignment::get_due_date($icontent, $ownsubmission);
                 $status = $ownsubmission->status === assignment::STATUS_DRAFT
                     ? get_string('submissiondraft', 'icontent')
                     : ($ownsubmission->status === assignment::STATUS_GRADED
                         ? get_string('submissiongraded', 'icontent')
                         : get_string('submissionsubmitted', 'icontent'));
                 echo html_writer::tag('p', get_string('submissionstatus', 'icontent') . ': ' . $status);
-                if (!empty($icontent->duedate)) {
+                if ($duedate) {
                     echo html_writer::tag(
                         'p',
-                        get_string('duedate', 'icontent') . ': ' . userdate((int)$icontent->duedate)
+                        get_string('duedate', 'icontent') . ': ' . userdate($duedate)
                     );
                 }
 
@@ -368,7 +369,7 @@ if (!empty($icontent->assignmentmode)) {
                     );
                     $submitform .= html_writer::end_tag('form');
                     echo $submitform;
-                } else if ($icontent->duedate && $ownsubmission->timesubmitted > $icontent->duedate) {
+                } else if ($duedate && $ownsubmission->timesubmitted > $duedate) {
                     echo html_writer::tag('p', get_string('submissionlate', 'icontent'));
                 }
 

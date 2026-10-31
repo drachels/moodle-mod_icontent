@@ -63,7 +63,7 @@ class icontent_info {
                 'icontentid' => $icontent->id,
                 'submissionid' => $submissionid,
             ],
-            'pagenum',
+            'pagenum, id',
             'id,
             icontentid,
             cmid,

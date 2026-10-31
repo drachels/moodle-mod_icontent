@@ -98,6 +98,63 @@ class assignment {
     }
 
     /**
+     * Get the submission deadline, including any owner-specific extension.
+     *
+     * @param \stdClass $icontent Activity record.
+     * @param \stdClass $submission Submission record.
+     * @return int Deadline timestamp, or zero for no deadline.
+     */
+    public static function get_due_date(\stdClass $icontent, \stdClass $submission): int {
+        $duedate = (int)($icontent->duedate ?? 0);
+        return $duedate ? max($duedate, (int)($submission->extensionduedate ?? 0)) : 0;
+    }
+
+    /**
+     * Update an owner-specific extension and optionally reopen a submission without clearing grades.
+     *
+     * @param int $submissionid Submission id.
+     * @param \stdClass $icontent Activity record.
+     * @param \stdClass $cm Course module.
+     * @param \context_module $context Module context.
+     * @param int $extensionduedate Extension timestamp, or zero to remove it.
+     * @param bool $reopen Return to an editable draft.
+     * @return \stdClass Updated submission.
+     */
+    public static function manage_submission(
+        int $submissionid,
+        \stdClass $icontent,
+        \stdClass $cm,
+        \context_module $context,
+        int $extensionduedate,
+        bool $reopen
+    ): \stdClass {
+        global $DB, $USER;
+        require_capability('mod/icontent:grade', $context);
+        if (empty($icontent->assignmentmode)) {
+            throw new \invalid_parameter_exception('This activity is not configured for submissions');
+        }
+        $submission = self::get_submission((int)$icontent->id, $submissionid);
+        if (!$submission || !self::can_view_submission($submission, $icontent, $cm, $context, (int)$USER->id)) {
+            throw new \required_capability_exception($context, 'mod/icontent:grade', 'nopermissions', '');
+        }
+        if ($extensionduedate < 0 || ($extensionduedate > 0 &&
+            (empty($icontent->duedate) || $extensionduedate <= (int)$icontent->duedate))) {
+            throw new \invalid_parameter_exception('An extension must be later than the activity due date');
+        }
+        if ($reopen && $submission->status === self::STATUS_DRAFT) {
+            throw new \moodle_exception('submissionalreadydraft', 'icontent');
+        }
+        $submission->extensionduedate = $extensionduedate;
+        if ($reopen) {
+            $submission->status = self::STATUS_DRAFT;
+            $submission->timesubmitted = 0;
+        }
+        $submission->timemodified = time();
+        $DB->update_record('icontent_submissions', $submission);
+        return $submission;
+    }
+
+    /**
      * Count logged page creation/edit events for a submission, or return null when logging is unavailable.
      *
      * @param \stdClass $submission Submission record.
@@ -286,6 +343,32 @@ class assignment {
         }
 
         return !empty($submission->groupid) && groups_is_member((int)$submission->groupid, $userid);
+    }
+
+    /**
+     * Check submission-page editing, including the activity's group visibility rules.
+     *
+     * @param \stdClass $page Page record.
+     * @param \stdClass $icontent Activity record.
+     * @param \stdClass $cm Course module.
+     * @param \context_module $context Module context.
+     * @param int $userid User id.
+     * @return bool
+     */
+    public static function can_edit_page(
+        \stdClass $page,
+        \stdClass $icontent,
+        \stdClass $cm,
+        \context_module $context,
+        int $userid
+    ): bool {
+        if (empty($icontent->assignmentmode) || empty($page->submissionid)) {
+            return false;
+        }
+        $submission = self::get_submission((int)$icontent->id, (int)$page->submissionid);
+        return $submission !== null &&
+            self::can_view_submission($submission, $icontent, $cm, $context, $userid) &&
+            self::can_edit_submission($submission, $context, $userid);
     }
 
     /**

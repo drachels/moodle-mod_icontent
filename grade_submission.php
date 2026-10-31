@@ -251,6 +251,11 @@ $form .= html_writer::end_tag('form');
 echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('gradeassignment', 'icontent'));
 echo html_writer::link(
+    new moodle_url('/mod/icontent/manage_submission.php', ['id' => $cm->id, 'submissionid' => $submissionid]),
+    get_string('managesubmission', 'icontent'),
+    ['class' => 'btn btn-secondary mb-3']
+);
+echo html_writer::link(
     new moodle_url('/mod/icontent/view.php', ['id' => $cm->id, 'submissionid' => $submissionid]),
     get_string('viewassignmentpages', 'icontent'),
     ['class' => 'btn btn-secondary mb-3']

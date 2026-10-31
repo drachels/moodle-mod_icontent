@@ -137,6 +137,7 @@ class provider implements
                 'feedback' => 'privacy:metadata:icontent_submissions:feedback',
                 'grader' => 'privacy:metadata:icontent_submissions:grader',
                 'timegraded' => 'privacy:metadata:icontent_submissions:timegraded',
+                'extensionduedate' => 'privacy:metadata:icontent_submissions:extensionduedate',
             ],
             'privacy:metadata:icontent_submissions'
         );
@@ -430,6 +431,8 @@ class provider implements
                         'timemodified' => $submission->timemodified
                             ? transform::datetime($submission->timemodified) : '',
                         'grade' => $submission->grade,
+                        'extensionduedate' => empty($submission->extensionduedate)
+                            ? '' : transform::datetime($submission->extensionduedate),
                         'feedback' => $submission->feedback,
                         'timegraded' => $submission->timegraded
                             ? transform::datetime($submission->timegraded) : '',
