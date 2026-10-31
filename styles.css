@@ -510,6 +510,57 @@
     }
 }
 
+@media (max-width: 767px) {
+    .path-mod-icontent .icontent-page .fulltextpage {
+        padding: 12px;
+        overflow-wrap: anywhere;
+    }
+    .path-mod-icontent .icontent-page .fulltextpage .page-layout {
+        columns: auto;
+        column-gap: normal;
+        column-rule: none;
+        min-width: 0;
+    }
+    .path-mod-icontent .icontent-page .fulltextpage .page-layout img,
+    .path-mod-icontent .icontent-page .fulltextpage .page-layout video {
+        max-width: 100%;
+        height: auto;
+        margin-right: 0;
+    }
+    .path-mod-icontent .icontent-page .fulltextpage .page-layout iframe,
+    .path-mod-icontent .icontent-page .fulltextpage .page-layout audio {
+        max-width: 100%;
+    }
+    .path-mod-icontent .icontent-page .fulltextpage .page-layout {
+        overflow-x: auto;
+    }
+    .path-mod-icontent .icontent-buttonbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+    }
+    .path-mod-icontent .icontent-buttonbar .btn,
+    .path-mod-icontent .icontent-page .toolbarpage a,
+    .path-mod-icontent .block_icontent_toc .action-list a {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 44px;
+        min-height: 44px;
+    }
+    .path-mod-icontent .icontent-page .toolbarpage {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 4px;
+    }
+    .path-mod-icontent .icontent-page .fulltextpage .toolbarpage .icon {
+        margin-left: 0;
+    }
+}
+
 .pull-right {
     float: right;
 }

@@ -46,6 +46,30 @@ Recommended action:
 ## Question engine parity planning
 See [QUESTION_ENGINE_PARITY_PLAN.md](QUESTION_ENGINE_PARITY_PLAN.md) for the concrete qtype-by-qtype parity checklist and migration sequence.
 
+## Mobile support (4.0.0, first phase)
+
+Phone browsers use the normal activity, with single-column content, constrained
+images/media and wrapping touch-sized page-navigation and toolbar controls.
+Wide authored tables remain horizontally scrollable within the content area.
+Questions, notes, editing and submission actions continue to use the browser;
+complex third-party question types or embeds may have their own device limits.
+
+The official Moodle app has an **online reader** for visible reference pages
+and authorized individual/group page sets. Existing own page sets are linked
+from the reader; public submissions can also be viewed when explicitly selected.
+Browsing other submissions and all interactive actions use **Open activity in
+browser**. App rendering cleans executable markup and does not reproduce page
+backgrounds, multi-column layouts or the browser question/notes interface.
+Reading logs page/activity views and view completion, but does not mark pages
+as read or create draft submissions.
+
+This is not offline support or a native app editor/question player. Site
+administrators must enable Moodle mobile web services and permit site plugins
+under the site's Moodle App settings; app-plan/custom-app restrictions may also
+affect availability. After upgrading, refresh the activity in the app or log
+out and back in if the new handler is not discovered. No additional iContent
+server worker is needed for the reader (presentation imports still require one).
+
 ## License / Licença
 * The iContent uses the GPL-3.0+ license, to learn more read the link: [GPL license](http://www.gnu.org/copyleft/gpl.html).
 * O iContent utiliza a licença GPL-3.0+, para saber mais leia no link: [GPL license](http://www.gnu.org/copyleft/gpl.html).

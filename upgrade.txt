@@ -43,10 +43,12 @@ Upgrade.txt working notes:
 20240827 iContent_1309 - Need to implement viewaftertimeclose capability.
 20260313 iContent_1440 - Need to implement running code prechecks before a release.
 20260602 iContent_1498 - Feature Request - It would be nice if Content Pages had mobile support.
+    20261031 First-phase support implemented in 4.0.0; native app interaction and offline use remain pending.
 20260623 iContent_1508 - Feature Request - It would be nice to include Content Page documentation
     as an included activity.
 20260623 iContent_1509 - Feature Request - It would be nice if the question_matrix was an editable page.
 20260623 iContent_1510 - Feature Request - Need to see about changing files to classes.
+    20261031 Phase one implemented in 4.0.0; remaining legacy files are still pending.
 20260715 iContent_1517 - Feature Request - See if question results can make other activities mandatory.
 20260715 iContent_1518 - Feature Request - Can SEB be used with Content pages that have questions? 
 20260809 iContent_1528 - Feature Request - Investigate adding audio capability to pages
@@ -57,6 +59,27 @@ Upgrade.txt working notes:
 
 
 === 4.0.0 === pending
+20260602 iContent_1498 - Feature Request - It would be nice if Content Pages had mobile support.
+    2026103131 - Add an online Moodle-app reader for visible reference and authorized
+        individual/group pages, with browser handoff for questions, notes, editing and submissions.
+    2026103132 - Preserve page order, embedded file URLs, page/activity view events and view
+        completion; enforce enrolment, hidden-page, submission and activity time-window checks.
+    2026103133 - Improve phone-browser content with a single-column layout, constrained media,
+        local scrolling for wide tables and wrapping 44-pixel navigation/toolbar targets.
+    2026103134 - Document app enablement and first-phase limits; offline reading and native
+        app editing, question answering, notes and grading remain deferred.
+    2026103135 - Verify mobile API discovery, content and access/completion behavior with
+        12 tests and 36 assertions; check 320/390px browser layouts and 44px touch targets.
+        Actual Moodle-app device verification remains required.
+20260623 iContent_1510 - Feature Request - Need to see about changing files to classes.
+    2026103127 - Move the page-edit form to autoloaded mod_icontent\form\page_edit and
+        update edit.php; retain edit_form.php as a compatibility wrapper for legacy callers.
+    2026103128 - Preserve form controls, colour selectors, file handling and validation;
+        verify new/existing page rendering and legacy compatibility with 3 tests and 27 assertions.
+    2026103129 - Move the renderer to autoloaded mod_icontent\output\renderer, retaining
+        renderer.php as a compatibility wrapper for legacy callers and theme subclasses.
+    2026103130 - Preserve renderer methods and AMD initialization; verify Moodle renderer
+        discovery, legacy compatibility and JavaScript requirements with 3 tests and 10 assertions.
 20240111 iContent_1167 - iContent - Capability "mod/icontent:rate" was not found! This has to
     be fixed in code.
     2026103100 Added the missing capability for teachers, editing teachers and managers.

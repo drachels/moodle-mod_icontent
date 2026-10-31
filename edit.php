@@ -24,10 +24,10 @@
 
 use mod_icontent\local\icontent_info;
 use mod_icontent\local\assignment;
+use mod_icontent\form\page_edit;
 
 require(dirname(__FILE__) . '/../../config.php');
 require_once(dirname(__FILE__) . '/locallib.php');
-require_once(dirname(__FILE__) . '/edit_form.php');
 
 $cmid = required_param('cmid', PARAM_INT);  // Content Course Module ID.
 $pageid = optional_param('id', 0, PARAM_INT); // Page ID.
@@ -162,7 +162,7 @@ $pageicontentoptions = [
 $page = file_prepare_standard_editor($page, 'pageicontent', $pageicontentoptions, $context, 'mod_icontent', 'page', $page->id);
 $page = file_prepare_standard_filemanager($page, 'bgimage', $bgimageoptions, $context, 'mod_icontent', 'bgpage', $page->id);
 
-$mform = new icontent_pages_edit_form(null, [
+$mform = new page_edit(null, [
     'page' => $page,
     'pageicontentoptions' => $pageicontentoptions,
     'bgimagemaxbytes' => $bgimagemaxbytes,

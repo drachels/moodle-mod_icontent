@@ -1,0 +1,52 @@
+{{!
+    @template mod_icontent/mobileapp/reader
+
+    Online app reader. App navigation refreshes access checks for every requested page.
+}}
+{{=<% %>=}}
+<ion-card>
+    <ion-card-content><% notice %></ion-card-content>
+</ion-card>
+<ion-button expand="block" href="<% browserurl %>" core-link [inApp]="false" [autoLogin]="true">
+    <% browserlabel %>
+</ion-button>
+<%# unavailable %>
+    <ion-item><ion-label class="ion-text-wrap"><% unavailable %></ion-label></ion-item>
+<%/ unavailable %>
+<%# hasreferences %>
+    <ion-button expand="block" fill="outline" core-site-plugins-new-content component="mod_icontent"
+        method="mobile_view" title="<% referenceslabel %>" [args]="{cmid: <% cmid %>, courseid: <% courseid %>, submissionid: 0}">
+        <% referenceslabel %>
+    </ion-button>
+<%/ hasreferences %>
+<%# ownsubmissionid %>
+    <ion-button expand="block" fill="outline" core-site-plugins-new-content component="mod_icontent"
+        method="mobile_view" title="<% ownlabel %>"
+        [args]="{cmid: <% cmid %>, courseid: <% courseid %>, submissionid: <% ownsubmissionid %>}">
+        <% ownlabel %>
+    </ion-button>
+<%/ ownsubmissionid %>
+<%# emptymessage %>
+    <ion-item><ion-label class="ion-text-wrap"><% emptymessage %></ion-label></ion-item>
+<%/ emptymessage %>
+<%# pageid %>
+    <ion-card>
+        <%# showtitle %>
+            <ion-card-header><ion-card-title><% pagetitle %></ion-card-title></ion-card-header>
+        <%/ showtitle %>
+        <ion-card-content>
+            <core-format-text [text]="CONTENT_OTHERDATA.content" component="mod_icontent" componentId="<% pageid %>">
+            </core-format-text>
+        </ion-card-content>
+    </ion-card>
+<%/ pageid %>
+<ion-list>
+    <ion-list-header><ion-label><% pageslabel %></ion-label></ion-list-header>
+    <%# pages %>
+        <ion-item button core-site-plugins-new-content component="mod_icontent" method="mobile_view" title="<% title %>"
+            [args]="{cmid: <% cmid %>, courseid: <% courseid %>, submissionid: <% submissionid %>, pageid: <% id %>}"
+            <%# current %>aria-current="page"<%/ current %>>
+            <ion-label class="ion-text-wrap"><% title %></ion-label>
+        </ion-item>
+    <%/ pages %>
+</ion-list>
