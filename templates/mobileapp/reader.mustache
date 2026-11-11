@@ -1,12 +1,15 @@
 {{!
     @template mod_icontent/mobileapp/reader
 
-    Online app reader. App navigation refreshes access checks for every requested page.
+    Native online app interactions. Navigation refreshes access checks for every requested page.
 }}
 {{=<% %>=}}
 <ion-card>
     <ion-card-content><% notice %></ion-card-content>
 </ion-card>
+<ion-item *ngIf="nativeError" role="alert" color="danger">
+    <ion-label class="ion-text-wrap">{{ nativeError }}</ion-label>
+</ion-item>
 <ion-button expand="block" href="<% browserurl %>" core-link [inApp]="false" [autoLogin]="true">
     <% browserlabel %>
 </ion-button>
@@ -14,15 +17,14 @@
     <ion-item><ion-label class="ion-text-wrap"><% unavailable %></ion-label></ion-item>
 <%/ unavailable %>
 <%# hasreferences %>
-    <ion-button expand="block" fill="outline" core-site-plugins-new-content component="mod_icontent"
-        method="mobile_view" title="<% referenceslabel %>" [args]="{cmid: <% cmid %>, courseid: <% courseid %>, submissionid: 0}">
+    <ion-button expand="block" fill="outline" [disabled]="nativeBusy"
+        (click)="navigateNativePage({cmid: <% cmid %>, courseid: <% courseid %>, submissionid: 0})">
         <% referenceslabel %>
     </ion-button>
 <%/ hasreferences %>
 <%# ownsubmissionid %>
-    <ion-button expand="block" fill="outline" core-site-plugins-new-content component="mod_icontent"
-        method="mobile_view" title="<% ownlabel %>"
-        [args]="{cmid: <% cmid %>, courseid: <% courseid %>, submissionid: <% ownsubmissionid %>}">
+    <ion-button expand="block" fill="outline" [disabled]="nativeBusy"
+        (click)="navigateNativePage({cmid: <% cmid %>, courseid: <% courseid %>, submissionid: <% ownsubmissionid %>})">
         <% ownlabel %>
     </ion-button>
 <%/ ownsubmissionid %>
@@ -39,12 +41,150 @@
             </core-format-text>
         </ion-card-content>
     </ion-card>
+    <%# hasquestions %>
+        <ion-card>
+            <ion-card-header>
+                <ion-button fill="clear" (click)="questionsExpanded = !questionsExpanded"
+                    [attr.aria-expanded]="questionsExpanded"><% questionslabel %></ion-button>
+            </ion-card-header>
+            <ion-card-content [hidden]="!questionsExpanded">
+                <form class="icontent-native-questions" (ngSubmit)="submitNativeQuestions(<% usageid %>)">
+                    <ion-card *ngFor="let question of nativeQuestions">
+                        <ion-card-header>
+                            <ion-card-title><% pointslabel %> {{ question.maxmark }}</ion-card-title>
+                            <p>{{ question.status }}</p>
+                        </ion-card-header>
+                        <ion-card-content>
+                            <core-question [question]="question" component="mod_icontent" [componentId]="<% cmid %>"
+                                [usageId]="<% usageid %>" [offlineEnabled]="false" contextLevel="module"
+                                [contextInstanceId]="<% cmid %>" [courseId]="<% courseid %>"
+                                preferredBehaviour="deferredfeedback" [review]="<% review %>"
+                                (onAbort)="questionAborted = true">
+                            </core-question>
+                        </ion-card-content>
+                    </ion-card>
+                    <%# cansubmit %>
+                        <ion-button type="button" expand="block" fill="outline"
+                            [disabled]="nativeBusy || questionAborted" (click)="saveNativeDraft()">
+                            <% savedraftlabel %>
+                        </ion-button>
+                        <ion-button type="submit" expand="block" [disabled]="nativeBusy || questionAborted">
+                            <% submitlabel %>
+                        </ion-button>
+                    <%/ cansubmit %>
+                </form>
+                <%# canretry %>
+                    <ion-button expand="block" fill="outline" [disabled]="nativeBusy"
+                        (click)="retryConfirm = !retryConfirm"><% tryagainlabel %></ion-button>
+                    <ion-button *ngIf="retryConfirm" expand="block" color="danger" [disabled]="nativeBusy"
+                        (click)="runNativeAction('retry', {})"><% confirmretry %></ion-button>
+                <%/ canretry %>
+                <p *ngIf="questionAborted"><% unsupportednotice %></p>
+                <%# unsupported %><p><% unsupportednotice %></p><%/ unsupported %>
+                <%# browserresults %>
+                    <ion-item *ngFor="let answer of nativePastAnswers">
+                        <ion-label class="ion-text-wrap">
+                            <p>{{ answer.name }}</p>
+                            <p>{{ answer.answer }}</p>
+                            <p>{{ answer.mark }} / {{ answer.maxmark }}</p>
+                        </ion-label>
+                    </ion-item>
+                <%/ browserresults %>
+                <div *ngIf="questionAborted">
+                    <ion-button expand="block" href="<% questionsurl %>" core-link [inApp]="false" [autoLogin]="true">
+                        <% questionsbrowserlabel %>
+                    </ion-button>
+                </div>
+                <%# unsupported %>
+                <ion-button expand="block" href="<% questionsurl %>" core-link [inApp]="false" [autoLogin]="true">
+                    <% questionsbrowserlabel %>
+                </ion-button>
+                <%/ unsupported %>
+            </ion-card-content>
+        </ion-card>
+    <%/ hasquestions %>
+    <%# hasnotes %>
+        <ion-card>
+            <ion-card-header>
+                <ion-button fill="clear" (click)="notesExpanded = !notesExpanded"
+                    [attr.aria-expanded]="notesExpanded"><% noteslabel %></ion-button>
+            </ion-card-header>
+            <ion-card-content [hidden]="!notesExpanded">
+                <ion-segment [(ngModel)]="noteForm.tab" [disabled]="nativeBusy || noteForm.action !== 'addnote'">
+                    <ion-segment-button value="note"><ion-label><% notelabel %></ion-label></ion-segment-button>
+                    <ion-segment-button value="doubt"><ion-label><% doubtlabel %></ion-label></ion-segment-button>
+                </ion-segment>
+                <ion-card *ngFor="let note of nativeNotes" [hidden]="note.tab !== noteForm.tab">
+                    <ion-card-header>
+                        <ion-card-title>{{ note.author }}</ion-card-title>
+                        <p>{{ note.date }}</p>
+                        <p *ngIf="note.parent"><% replylabel %> #{{ note.parent }}</p>
+                        <p *ngIf="note.private"><% privatelabel %></p>
+                        <p *ngIf="note.featured"><% featuredlabel %></p>
+                        <p *ngIf="note.tutoronly"><% tutorlabel %></p>
+                    </ion-card-header>
+                    <ion-card-content>
+                        <core-format-text [text]="note.text" component="mod_icontent" [componentId]="<% cmid %>"
+                            contextLevel="module" [contextInstanceId]="<% cmid %>" [courseId]="<% courseid %>">
+                        </core-format-text>
+                        <ion-button *ngIf="note.canreply" fill="clear" [disabled]="nativeBusy"
+                            (click)="startNativeNote('replynote', note)"><% replylabel %></ion-button>
+                        <ion-button *ngIf="note.canedit" fill="clear" [disabled]="nativeBusy"
+                            (click)="startNativeNote('editnote', note)"><% editlabel %></ion-button>
+                        <ion-button *ngIf="note.canlike" fill="clear" [disabled]="nativeBusy"
+                            (click)="runNativeAction('likenote', {noteid: note.id})">
+                            <span *ngIf="!note.liked"><% likelabel %></span>
+                            <span *ngIf="note.liked"><% unlikelabel %></span> ({{ note.likes }})
+                        </ion-button>
+                        <ion-button *ngIf="note.canremove" fill="clear" color="danger" [disabled]="nativeBusy"
+                            (click)="deleteConfirm = note.id"><% deletelabel %></ion-button>
+                        <div *ngIf="deleteConfirm === note.id">
+                            <p><% deleteconfirm %></p>
+                            <ion-button color="danger" [disabled]="nativeBusy"
+                                (click)="runNativeAction('deletenote', {noteid: note.id})"><% deletelabel %></ion-button>
+                            <ion-button fill="clear" (click)="deleteConfirm = 0"><% cancellabel %></ion-button>
+                        </div>
+                    </ion-card-content>
+                </ion-card>
+                <form (ngSubmit)="saveNativeNote()">
+                    <p *ngIf="noteForm.action === 'editnote'"><% editlabel %> #{{ noteForm.noteid }}</p>
+                    <p *ngIf="noteForm.action === 'replynote'"><% replylabel %> #{{ noteForm.noteid }}</p>
+                    <ion-textarea [(ngModel)]="noteForm.comment" name="comment" maxlength="1024" required
+                        [autoGrow]="true" [disabled]="nativeBusy" label="<% noteslabel %>" labelPlacement="stacked">
+                    </ion-textarea>
+                    <div *ngIf="noteForm.action === 'addnote'">
+                        <%# canprivate %>
+                            <ion-checkbox [(ngModel)]="noteForm.private" name="private" [disabled]="nativeBusy">
+                                <% privatelabel %>
+                            </ion-checkbox>
+                        <%/ canprivate %>
+                        <%# canfeatured %>
+                            <ion-checkbox [(ngModel)]="noteForm.featured" name="featured" [disabled]="nativeBusy">
+                                <% featuredlabel %>
+                            </ion-checkbox>
+                        <%/ canfeatured %>
+                        <%# cantutor %>
+                            <ion-checkbox [(ngModel)]="noteForm.doubttutor" name="doubttutor" [disabled]="nativeBusy">
+                                <% tutorlabel %>
+                            </ion-checkbox>
+                        <%/ cantutor %>
+                    </div>
+                    <ion-button type="submit" expand="block" [disabled]="nativeBusy || !noteForm.comment.trim()">
+                        <% savelabel %>
+                    </ion-button>
+                    <ion-button *ngIf="noteForm.action !== 'addnote'" fill="clear" [disabled]="nativeBusy"
+                        (click)="cancelNativeNote()"><% cancellabel %></ion-button>
+                </form>
+            </ion-card-content>
+        </ion-card>
+    <%/ hasnotes %>
 <%/ pageid %>
 <ion-list>
     <ion-list-header><ion-label><% pageslabel %></ion-label></ion-list-header>
     <%# pages %>
-        <ion-item button core-site-plugins-new-content component="mod_icontent" method="mobile_view" title="<% title %>"
-            [args]="{cmid: <% cmid %>, courseid: <% courseid %>, submissionid: <% submissionid %>, pageid: <% id %>}"
+        <ion-item button (click)="navigateNativePage({cmid: <% cmid %>, courseid: <% courseid %>,
+            submissionid: <% submissionid %>, pageid: <% id %>})"
+            [disabled]="nativeBusy<%# blocked %> || true<%/ blocked %>"
             <%# current %>aria-current="page"<%/ current %>>
             <ion-label class="ion-text-wrap"><% title %></ion-label>
         </ion-item>

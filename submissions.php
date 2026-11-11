@@ -18,6 +18,7 @@
  * View assignment submissions.
  *
  * @package    mod_icontent
+ * @copyright  2026 AL Rachels
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
@@ -98,7 +99,8 @@ foreach ($submissions as $submission) {
     if ($submission->groupid) {
         $ownername = get_string('group', 'group') . ': ' . format_string(groups_get_group_name((int)$submission->groupid));
     } else {
-        $owner = $DB->get_record('user', ['id' => $submission->userid], 'id, firstname, lastname', IGNORE_MISSING);
+        $namefields = 'id, ' . implode(', ', \core_user\fields::get_name_fields());
+        $owner = $DB->get_record('user', ['id' => $submission->userid], $namefields, IGNORE_MISSING);
         $ownername = $owner ? fullname($owner) : get_string('unknownuser');
     }
 

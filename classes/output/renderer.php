@@ -16,8 +16,6 @@
 
 namespace mod_icontent\output;
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
  * Renderer for Content Pages.
  *

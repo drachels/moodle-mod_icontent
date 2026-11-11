@@ -8,22 +8,21 @@
 //
 // Moodle is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with Moodle. If not, see <http://www.gnu.org/licenses/>.
+// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
 namespace mod_icontent;
 
 use mod_icontent\output\renderer;
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
  * Tests for renderer discovery, compatibility and JavaScript initialization.
  *
  * @package mod_icontent
+ * @copyright 2026 AL Rachels
  * @license http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  * @covers \mod_icontent\output\renderer
  */

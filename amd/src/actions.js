@@ -26,8 +26,9 @@ define(['jquery', 'jqueryui', 'mod_icontent/cookiehandler'], function($, jqui, c
      *
      * @param {number|string} cmid
      * @param {number|string} pageid
+     * @param {number|string} sourcepageid
      */
-    function getDeepLink(cmid, pageid) {
+    function getDeepLink(cmid, pageid, sourcepageid) {
         if (!cmid || !pageid) {
             return '#';
         }
@@ -35,6 +36,11 @@ define(['jquery', 'jqueryui', 'mod_icontent/cookiehandler'], function($, jqui, c
         var url = new URL(window.location.href);
         url.searchParams.set('id', cmid);
         url.searchParams.set('pageid', pageid);
+        if (sourcepageid) {
+            url.searchParams.set('sourcepageid', sourcepageid);
+        } else {
+            url.searchParams.delete('sourcepageid');
+        }
         url.hash = '';
         return url.toString();
     }
@@ -603,11 +609,18 @@ define(['jquery', 'jqueryui', 'mod_icontent/cookiehandler'], function($, jqui, c
             success: function(data) {
                 var routednextpageid = parseInt(data.routednextpageid, 10) || 0;
                 if (routednextpageid > 0 && routednextpageid !== currentpageid) {
-                    window.location.assign(getDeepLink(cmid, routednextpageid));
+                    window.location.assign(getDeepLink(cmid, routednextpageid, currentpageid));
                     return;
                 }
 
                 $("#idquestionsarea").html(data.grid);
+                $(".page-grading-warning").remove();
+                if (data.pagegradingrequired) {
+                    $("#idquestionsarea").before(
+                        $('<div />').addClass('alert alert-warning page-grading-warning')
+                            .attr('role', 'alert').text(data.pagegradingrequired)
+                    );
+                }
                 onAfterQuestionsAreaUpdated();
             },
             error: function(xhr, status) {

@@ -23,6 +23,7 @@ require_once($CFG->libdir . '/formslib.php');
  * Upload a presentation for append-only editable import.
  *
  * @package mod_icontent
+ * @copyright 2026 AL Rachels
  * @license http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class presentation_import extends \moodleform {

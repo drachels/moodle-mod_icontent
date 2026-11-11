@@ -215,9 +215,26 @@ function icontent_question_engine_phase1_bootstrap_usage($objpage, $questions): 
     if (!empty($existingqubaid)) {
         require_once($CFG->libdir . '/questionlib.php');
         try {
-            question_engine::load_questions_usage_by_activity($existingqubaid);
+            $existingquba = question_engine::load_questions_usage_by_activity($existingqubaid);
             if ($existingquestionmap === $desiredquestionmap && !empty($existingquestionmap)) {
-                return;
+                $expectedmarks = [];
+                foreach ($questions as $question) {
+                    if (isset($desiredquestionmap[(int)$question->qid])) {
+                        $expectedmarks[$desiredquestionmap[(int)$question->qid]] = (float)$question->maxmark;
+                    }
+                }
+                $marksagree = true;
+                foreach ($existingquba->get_slots() as $slot) {
+                    $questionid = (int)$existingquba->get_question($slot)->id;
+                    if (!isset($expectedmarks[$questionid]) ||
+                            abs($existingquba->get_question_max_mark($slot) - $expectedmarks[$questionid]) > 0.00001) {
+                        $marksagree = false;
+                        break;
+                    }
+                }
+                if ($marksagree) {
+                    return;
+                }
             }
         } catch (\Throwable $e) {
             // Ignore stale/invalid usage and rebuild below.
@@ -658,6 +675,32 @@ function icontent_get_latest_question_version_id(int $questionid): int {
 }
 
 /**
+ * Resolve the maximum for the version actually used by the question engine.
+ *
+ * A mapping seeded from the bank default follows later defaults; a distinct
+ * activity-specific maximum remains an override. Stored mappings are unchanged.
+ *
+ * @param stdClass $question Page question with qid, qtype, maxmark and defaultmark.
+ * @return float
+ */
+function icontent_get_pagequestion_maxmark(stdClass $question): float {
+    global $DB;
+
+    $maxmark = (float)$question->maxmark;
+    $defaultmark = (float)$question->defaultmark;
+    if (($maxmark <= 0 || abs($maxmark - $defaultmark) < 0.00001) &&
+            in_array($question->qtype, icontent_question_engine_phase1_supported_qtypes(), true)) {
+        $latestid = icontent_get_latest_question_version_id((int)$question->qid);
+        $defaultmark = (float)$DB->get_field('question', 'defaultmark', ['id' => $latestid], MUST_EXIST);
+        $maxmark = $defaultmark;
+    } else if ($maxmark <= 0) {
+        $maxmark = $defaultmark;
+    }
+
+    return $maxmark > 0 ? $maxmark : 1.0;
+}
+
+/**
  * Rewrite questiontext pluginfile URLs in rendered question HTML to mod_icontent proxy URLs.
  *
  * @param string $renderedhtml
@@ -983,13 +1026,24 @@ function icontent_get_toc_clusters(array $pages) {
  * @param stdClass $page
  * @param context_module $context
  * @param int $totalpages
+ * @param int $sourcepageid Current page id for navigation checks.
  * @return string
  */
-function icontent_render_toc_page_link(stdClass $page, context_module $context, $totalpages) {
+function icontent_render_toc_page_link(
+    stdClass $page,
+    context_module $context,
+    $totalpages,
+    int $sourcepageid = 0
+) {
     $title = trim(format_string($page->title, true, ['context' => $context]));
 
     return html_writer::link(
-        new moodle_url('/mod/icontent/view.php', ['id' => $page->cmid, 'pageid' => $page->id]),
+        new moodle_url('/mod/icontent/view.php', [
+            'id' => $page->cmid,
+            'pageid' => $page->id,
+            'submissionid' => (int)($page->submissionid ?? 0),
+            'sourcepageid' => $sourcepageid,
+        ]),
         $title,
         [
             'title' => s($title),
@@ -1145,6 +1199,7 @@ function icontent_render_toc_action_list(stdClass $page, stdClass $cm, $position
  * @param int $pagecount
  * @param array $classes
  * @param bool $submissionedit Show limited actions for an editable submission.
+ * @param int $sourcepageid Current page id for navigation checks.
  * @return string
  */
 function icontent_render_toc_item(
@@ -1156,11 +1211,12 @@ function icontent_render_toc_item(
     $position,
     $pagecount,
     array $classes = [],
-    bool $submissionedit = false
+    bool $submissionedit = false,
+    int $sourcepageid = 0
 ) {
     $classes[] = 'clearfix';
     $html = html_writer::start_tag('li', ['class' => implode(' ', array_unique($classes))]);
-    $html .= icontent_render_toc_page_link($page, $context, $totalpages);
+    $html .= icontent_render_toc_page_link($page, $context, $totalpages, $sourcepageid);
     if ($edit || $submissionedit) {
         $html .= icontent_render_toc_action_list($page, $cm, $position, $pagecount, !$edit);
     }
@@ -1190,6 +1246,13 @@ function icontent_get_toc($pages, $page, $icontent, $cm, $edit) {
     }
     $positions = array_flip(array_keys($pagesbyid));
     $firstpage = reset($pages);
+    $currentpageid = is_object($page)
+        ? (int)$page->id
+        : (int)(icontent_get_pageid_by_pagenum(
+            (int)$cm->id,
+            $currentpagenum,
+            (int)($firstpage->submissionid ?? 0)
+        ) ?: 0);
     $submissionedit = $firstpage &&
         \mod_icontent\local\assignment::can_edit_page($firstpage, $icontent, $cm, $context, (int)$USER->id);
     $clusters = icontent_get_toc_clusters($pages);
@@ -1207,7 +1270,16 @@ function icontent_get_toc($pages, $page, $icontent, $cm, $edit) {
 
         $position++;
         $toc .= icontent_render_toc_item(
-            $pg, $context, $cm, $tpages, $edit, $positions[(int)$pg->id] + 1, $tpages, [], $submissionedit
+            $pg,
+            $context,
+            $cm,
+            $tpages,
+            $edit,
+            $positions[(int)$pg->id] + 1,
+            $tpages,
+            [],
+            $submissionedit,
+            $currentpageid
         );
 
         if (empty($clusters[(int)$pg->id])) {
@@ -1236,7 +1308,8 @@ function icontent_get_toc($pages, $page, $icontent, $cm, $edit) {
                     $positions[(int)$clusterpage->id] + 1,
                     $tpages,
                     ['cluster-page'],
-                    $submissionedit
+                    $submissionedit,
+                    $currentpageid
                 );
             }
 
@@ -1815,6 +1888,7 @@ function icontent_update_question_attempts($attempt) {
  * @param object $pages
  * @param object $cmid
  * @param int $startwithpage
+ * @param int $submissionid Submission id, or zero for shared reference pages.
  * @return string with $pgbuttons
  */
 function icontent_full_paging_button_bar($pages, $cmid, $startwithpage = 1, int $submissionid = 0) {
@@ -1837,7 +1911,15 @@ function icontent_full_paging_button_bar($pages, $cmid, $startwithpage = 1, int 
         if (!$page->hidden) {
             $npage++;
             $pgbuttons .= html_writer::link(
-                new moodle_url('/mod/icontent/view.php', ['id' => $page->cmid, 'pageid' => $page->id]),
+                new moodle_url('/mod/icontent/view.php', [
+                    'id' => $page->cmid,
+                    'pageid' => $page->id,
+                    'sourcepageid' => (int)(icontent_get_pageid_by_pagenum(
+                        $cmid,
+                        $startwithpage,
+                        $submissionid
+                    ) ?: 0),
+                ]),
                 $npage,
                 [
                     'title' => s($page->title),
@@ -1869,6 +1951,7 @@ function icontent_full_paging_button_bar($pages, $cmid, $startwithpage = 1, int 
  * @param int $cmid
  * @param int $startwithpage
  * @param string $attrid
+ * @param int $submissionid Submission id, or zero for shared reference pages.
  * @return string with $controlbuttons
  */
 function icontent_simple_paging_button_bar(
@@ -1922,6 +2005,7 @@ function icontent_simple_paging_button_bar(
  *
  * @param object $icontent
  * @param object $context
+ * @param int $submissionid Submission id, or zero for shared reference pages.
  * @return array of id=>icontent
  */
 function icontent_get_startpagenum($icontent, $context, int $submissionid = 0) {
@@ -1971,6 +2055,7 @@ function icontent_get_startpagenum($icontent, $context, int $submissionid = 0) {
  * Please note the icontent/text of pages is not included.
  *
  * @param object $icontent
+ * @param int $submissionid Submission id, or zero for shared reference pages.
  * @return array of id=>icontent
  */
 function icontent_get_minpagenum($icontent, int $submissionid = 0) {
@@ -2018,6 +2103,7 @@ function icontent_get_navigation_source_pageid(stdClass $objpage) {
  *
  * @param int $pageid
  * @param int $cmid
+ * @param int $submissionid Submission id, or zero for shared reference pages.
  * @return stdClass|false
  */
 function icontent_get_visible_page_by_id($pageid, $cmid, int $submissionid = 0) {
@@ -2039,6 +2125,7 @@ function icontent_get_visible_page_by_id($pageid, $cmid, int $submissionid = 0) 
  *
  * @param int $cmid
  * @param int $pagenum
+ * @param int $submissionid Submission id, or zero for shared reference pages.
  * @return int
  */
 function icontent_get_previous_mainline_pagenum($cmid, $pagenum, int $submissionid = 0) {
@@ -2063,6 +2150,7 @@ function icontent_get_previous_mainline_pagenum($cmid, $pagenum, int $submission
  *
  * @param int $cmid
  * @param int $pagenum
+ * @param int $submissionid Submission id, or zero for shared reference pages.
  * @return int
  */
 function icontent_get_next_mainline_pagenum($cmid, $pagenum, int $submissionid = 0) {
@@ -2211,6 +2299,7 @@ function icontent_get_navigation_page_context(stdClass $objpage) {
  *
  * @param int $cmid
  * @param int $pageid
+ * @param int $submissionid Submission id, or zero for shared reference pages.
  * @return int
  */
 function icontent_get_custom_navigation_pagenum($cmid, $pageid, int $submissionid = 0) {
@@ -2236,6 +2325,8 @@ function icontent_get_question_routed_next_pageid(stdClass $objpage) {
                    pq.incorrectnextpageid,
                    pq.manualreviewnextpageid,
                    pq.defaultnextpageid,
+                   pq.minimumscore,
+                   pq.minimumscorenextpageid,
                    COALESCE(NULLIF(pq.maxmark, 0), q.defaultmark, 1) AS effectivemaxmark
               FROM {icontent_pages_questions} pq
          LEFT JOIN {question} q
@@ -2247,13 +2338,14 @@ function icontent_get_question_routed_next_pageid(stdClass $objpage) {
                     OR pq.incorrectnextpageid > 0
                     OR pq.manualreviewnextpageid > 0
                     OR pq.defaultnextpageid > 0
+                    OR pq.minimumscorenextpageid > 0
                )
-          ORDER BY pq.id";
+          ORDER BY CASE WHEN pq.minimumscore > 0 THEN 0 ELSE 1 END, pq.id";
     $routes = $DB->get_records_sql($sql, [(int)$objpage->id, (int)$objpage->cmid]);
 
     foreach ($routes as $route) {
         $attempt = $DB->get_record_sql(
-            "SELECT id, fraction, rightanswer
+            "SELECT id, fraction, rightanswer, maxmark
                FROM {icontent_question_attempts}
               WHERE pagesquestionsid = ?
                 AND cmid = ?
@@ -2264,7 +2356,16 @@ function icontent_get_question_routed_next_pageid(stdClass $objpage) {
         );
 
         $targetpageid = 0;
-        if (!empty($attempt)) {
+        if ($attempt && (float)$attempt->maxmark > 0) {
+            $route->effectivemaxmark = (float)$attempt->maxmark;
+        }
+        if ((int)$route->minimumscore > 0) {
+            if (!\mod_icontent\local\assignment::question_meets_minimum_score($route, $attempt ?: null)) {
+                continue;
+            }
+            $targetpageid = (int)$route->minimumscorenextpageid;
+        }
+        if (!$targetpageid && !empty($attempt)) {
             if ($attempt->rightanswer === ICONTENT_QTYPE_ESSAY_STATUS_TOEVALUATE && !empty($route->manualreviewnextpageid)) {
                 $targetpageid = (int)$route->manualreviewnextpageid;
             } else if (
@@ -2285,7 +2386,7 @@ function icontent_get_question_routed_next_pageid(stdClass $objpage) {
             continue;
         }
 
-        $targetpage = icontent_get_visible_page_by_id($targetpageid, $objpage->cmid);
+        $targetpage = icontent_get_visible_page_by_id($targetpageid, $objpage->cmid, (int)($objpage->submissionid ?? 0));
         if (!empty($targetpage)) {
             return (int)$targetpage->id;
         }
@@ -2396,17 +2497,17 @@ function icontent_get_next_pagenum(stdClass $objpage) {
         }
     }
 
-    $lastpagenum = icontent_get_max_visible_pagenum_by_cmid((int)$objpage->cmid, $submissionid);
-    if (!empty($lastpagenum) && (int)$objpage->pagenum >= (int)$lastpagenum) {
-        return 0;
-    }
-
     $routedpageid = icontent_get_question_routed_next_pageid($objpage);
     if (!empty($routedpageid)) {
         $routedpage = icontent_get_visible_page_by_id($routedpageid, $objpage->cmid, $submissionid);
         if (!empty($routedpage->pagenum)) {
             return (int)$routedpage->pagenum;
         }
+    }
+
+    $lastpagenum = icontent_get_max_visible_pagenum_by_cmid((int)$objpage->cmid, $submissionid);
+    if (!empty($lastpagenum) && (int)$objpage->pagenum >= (int)$lastpagenum) {
+        return 0;
     }
 
     if (icontent_page_is_clustered($objpage)) {
@@ -2429,6 +2530,7 @@ function icontent_get_next_pagenum(stdClass $objpage) {
  *
  * @param int $cmid
  * @param int $pagenum
+ * @param int $submissionid Submission id, or zero for shared reference pages.
  * @return int|null
  */
 function icontent_get_pageid_by_pagenum($cmid, $pagenum, int $submissionid = 0) {
@@ -2449,6 +2551,7 @@ function icontent_get_pageid_by_pagenum($cmid, $pagenum, int $submissionid = 0) 
  * Return the minimum visible page number for one activity instance.
  *
  * @param int $cmid
+ * @param int $submissionid Submission id, or zero for shared reference pages.
  * @return int
  */
 function icontent_get_min_visible_pagenum_by_cmid($cmid, int $submissionid = 0) {
@@ -2470,6 +2573,7 @@ function icontent_get_min_visible_pagenum_by_cmid($cmid, int $submissionid = 0) 
  * Return the maximum visible page number for one activity instance.
  *
  * @param int $cmid
+ * @param int $submissionid Submission id, or zero for shared reference pages.
  * @return int
  */
 function icontent_get_max_visible_pagenum_by_cmid($cmid, int $submissionid = 0) {
@@ -2500,12 +2604,71 @@ function icontent_get_max_visible_pagenum_by_cmid($cmid, int $submissionid = 0) 
 function icontent_set_grade_item(stdClass $icontent, $cmid, $userid) {
     global $CFG, $DB;
     require_once($CFG->libdir . '/gradelib.php');
+    if (!empty($icontent->assignmentmode)) {
+        $cm = get_coursemodule_from_id('icontent', $cmid, 0, false, MUST_EXIST);
+        $summary = \mod_icontent\local\assignment::get_page_score_summary($icontent, $cm, (int)$userid);
+        // A saved page-set grade (including individual member grades) remains the final override.
+        if ($summary->submission && $summary->submission->grade !== null) {
+            return;
+        }
+        $gradeitem = grade_item::fetch([
+            'courseid' => $icontent->course, 'itemtype' => 'mod', 'itemmodule' => 'icontent',
+            'iteminstance' => $icontent->id, 'itemnumber' => 0,
+        ]);
+        if ($gradeitem && $gradeitem->is_locked()) {
+            return;
+        }
+        $members = [(int)$userid];
+        if ($summary->submission && $summary->submission->groupid) {
+            $members = array_keys(get_enrolled_users(
+                context_module::instance((int)$cmid),
+                'mod/icontent:submit',
+                (int)$summary->submission->groupid,
+                'u.id'
+            ));
+        }
+        $transaction = $DB->start_delegated_transaction();
+        $grades = [];
+        foreach ($members as $memberid) {
+            $existinggrade = $gradeitem ? grade_grade::fetch(['itemid' => $gradeitem->id, 'userid' => $memberid]) : null;
+            if ($existinggrade && ($existinggrade->is_locked() || $existinggrade->is_overridden())) {
+                continue;
+            }
+            $membersummary = \mod_icontent\local\assignment::get_page_score_summary(
+                $icontent, $cm, (int)$memberid, $summary->submission
+            );
+            if ($membersummary->grade === null) {
+                continue;
+            }
+            $record = (object)[
+                'icontentid' => $icontent->id, 'userid' => $memberid, 'cmid' => $cmid,
+                'grade' => $membersummary->grade, 'timemodified' => time(),
+            ];
+            $record->id = $DB->get_field('icontent_grades', 'id', [
+                'icontentid' => $icontent->id, 'userid' => $memberid, 'cmid' => $cmid,
+            ]);
+            if ($record->id) {
+                $DB->update_record('icontent_grades', $record);
+            } else {
+                unset($record->id);
+                $DB->insert_record('icontent_grades', $record);
+            }
+            $grades[$memberid] = ['userid' => $memberid, 'rawgrade' => $membersummary->grade];
+        }
+        if ($grades && grade_update(
+            'mod/icontent', $icontent->course, 'mod', 'icontent', $icontent->id, 0, $grades
+        ) !== GRADE_UPDATE_OK) {
+            throw new moodle_exception('gradeupdatefailed', 'icontent');
+        }
+        $transaction->allow_commit();
+        return;
+    }
     $params = [
         'itemname' => $icontent->name,
         'idnumber' => $cmid,
     ];
     $sumfraction = icontent_get_sumfraction_by_userid($cmid, $userid);
-    $totalmaxfraction = icontent_get_totalmaxfraction_by_instance($cmid);
+    $totalmaxfraction = icontent_get_totalmaxfraction_by_instance($cmid, (int)$userid);
     if ($totalmaxfraction <= 0) {
         $totalmaxfraction = (float) icontent_get_totalquestions_by_instance($cmid);
     }
@@ -2573,6 +2736,11 @@ function icontent_count_questions_of_questionbank($coursecontext) {
  */
 function icontent_count_attempts_users($cmid, $groupid = 0) {
     global $DB;
+    if ($DB->get_field('icontent', 'assignmentmode', [
+        'id' => get_coursemodule_from_id('icontent', $cmid, 0, false, MUST_EXIST)->instance,
+    ])) {
+        return count(icontent_get_attempts_users($cmid, 'ASC', 0, 0, $groupid));
+    }
 
     $sql = "SELECT Count(DISTINCT u.id) AS totalattemptsusers
               FROM {user} u
@@ -2591,7 +2759,27 @@ function icontent_count_attempts_users($cmid, $groupid = 0) {
             $params[] = $groupid;
     }
         $totalattemptsusers = $DB->get_record_sql($sql, $params);
-    return (int) $totalattemptsusers->totalattemptsusers;
+    $rubricparams = [$cmid];
+    $rubricsql = "SELECT COUNT(DISTINCT pr.userid)
+                    FROM {icontent_page_rubric_grades} pr
+                   WHERE pr.cmid = ?
+                     AND NOT EXISTS (
+                         SELECT 1
+                           FROM {icontent_question_attempts} qa
+                          WHERE qa.cmid = pr.cmid
+                            AND qa.userid = pr.userid
+                     )";
+    if (!empty($groupid)) {
+        $rubricsql .= "
+                     AND EXISTS (
+                         SELECT 1
+                           FROM {groups_members} gm
+                          WHERE gm.userid = pr.userid
+                            AND gm.groupid = ?
+                     )";
+        $rubricparams[] = $groupid;
+    }
+    return (int)$totalattemptsusers->totalattemptsusers + (int)$DB->get_field_sql($rubricsql, $rubricparams);
 }
 
 /**
@@ -2658,7 +2846,29 @@ function icontent_count_attempts_users_with_open_answers($cmid, $status = null, 
             $params[] = $groupid;
     }
         $totalattemptsusers = $DB->get_record_sql($sql, $params);
-    return (int) $totalattemptsusers->totalattemptsusers;
+    $rubricparams = [$cmid, $status, $status];
+    $rubricsql = "SELECT COUNT(DISTINCT pr.userid)
+                    FROM {icontent_page_rubric_grades} pr
+                   WHERE pr.cmid = ?
+                     AND pr.status = ?
+                     AND NOT EXISTS (
+                         SELECT 1
+                           FROM {icontent_question_attempts} qa
+                          WHERE qa.cmid = pr.cmid
+                            AND qa.userid = pr.userid
+                            AND qa.rightanswer = ?
+                     )";
+    if (!empty($groupid)) {
+        $rubricsql .= "
+                     AND EXISTS (
+                         SELECT 1
+                           FROM {groups_members} gm
+                          WHERE gm.userid = pr.userid
+                            AND gm.groupid = ?
+                     )";
+        $rubricparams[] = $groupid;
+    }
+    return (int)$totalattemptsusers->totalattemptsusers + (int)$DB->get_field_sql($rubricsql, $rubricparams);
 }
 
 /**
@@ -2676,7 +2886,8 @@ function icontent_get_questions_of_currentpage($pageid, $cmid) {
         'icontent_pages_questions',
         ['pageid' => $pageid, 'cmid' => $cmid],
         null,
-        'questionid, id, questionid, maxmark, correctnextpageid, incorrectnextpageid, manualreviewnextpageid, defaultnextpageid'
+        'questionid, id, maxmark, correctnextpageid, incorrectnextpageid, manualreviewnextpageid,
+         defaultnextpageid, minimumscore, minimumscorenextpageid'
     );
 }
 
@@ -2709,33 +2920,18 @@ function icontent_get_infoanswer_by_questionid($questionid, $qtype, $answer) {
         case ICONTENT_QTYPE_TRUEFALSE:
             // Check if answer is a checkbox. Otherwise, is radio.
             if (is_array($answer)) {
-                $rightanswers = $DB->get_records_select('question_answers', 'question = ? AND fraction > ?', [$questionid, 0]);
-                // Get array with key ID answer.
+                $options = $DB->get_records('question_answers', ['question' => $questionid], 'id');
                 $arrayoptionsids = icontent_get_array_options_answerid($answer);
-                // Checks answers correct.
-                foreach ($rightanswers as $rightanswer) {
-                    $infoanswer->rightanswer .= $rightanswer->answer . ';';
-                    if (array_key_exists($rightanswer->id, $arrayoptionsids)) {
-                        $infoanswer->fraction += $rightanswer->fraction;
-                        $infoanswer->answertext .= $rightanswer->answer . ';';
+                foreach ($options as $option) {
+                    if ((float)$option->fraction > 0) {
+                        $infoanswer->rightanswer .= $option->answer . ';';
+                    }
+                    if (array_key_exists($option->id, $arrayoptionsids)) {
+                        $infoanswer->fraction += (float)$option->fraction;
+                        $infoanswer->answertext .= $option->answer . ';';
                     }
                 }
-                // Checks wrong answers.
-                if ($infoanswer->fraction < ICONTENT_QUESTION_FRACTION) {
-                    $wronganswers = $DB->get_records_select(
-                        'question_answers',
-                        'question = ? AND fraction = ?',
-                        [
-                            $questionid,
-                            0,
-                        ]
-                    );
-                    foreach ($wronganswers as $wronganswer) {
-                        if (array_key_exists($wronganswer->id, $arrayoptionsids)) {
-                            $infoanswer->answertext .= $wronganswer->answer . ';';
-                        }
-                    }
-                }
+                $infoanswer->fraction = max(0, min(ICONTENT_QUESTION_FRACTION, $infoanswer->fraction));
                 return $infoanswer;
             } else {
                 // Get data answer. Pattern e.g. [qpid-8_answerid-2].
@@ -2815,6 +3011,32 @@ function icontent_get_infoanswer_by_questionid($questionid, $qtype, $answer) {
  */
 function icontent_get_attempts_users($cmid, $sort, $page = 0, $perpage = ICONTENT_PER_PAGE, $groupid = 0) {
     global $CFG, $DB;
+    $cm = get_coursemodule_from_id('icontent', $cmid, 0, false, MUST_EXIST);
+    $icontent = $DB->get_record('icontent', ['id' => $cm->instance], '*', MUST_EXIST);
+    if (!empty($icontent->assignmentmode)) {
+        $context = context_module::instance((int)$cmid);
+        $namefields = \core_user\fields::for_userpic()->get_sql('u', false, '', 'id', false)->selects;
+        $users = get_enrolled_users($context, 'mod/icontent:submit', $groupid, $namefields, 'u.lastname ' . $sort);
+        $results = [];
+        foreach ($users as $user) {
+            $summary = \mod_icontent\local\assignment::get_page_score_summary($icontent, $cm, (int)$user->id);
+            if (!$summary->totalanswers && (!$summary->submission || $summary->submission->grade === null)) {
+                continue;
+            }
+            $user->sumfraction = $summary->earned;
+            $user->maxfraction = $summary->maximum;
+            $user->totalanswers = $summary->totalanswers;
+            $user->totalopenanswers = $summary->pending;
+            $user->rubricearned = $summary->rubricearned;
+            $user->rubricmaximum = $summary->rubricmaximum;
+            $user->pagescoregrade = $summary->grade;
+            $results[$user->id] = $user;
+        }
+        return $perpage ? array_slice(
+            $results, max(0, (int)$page) * min((int)$perpage, ICONTENT_MAX_PER_PAGE),
+            min((int)$perpage, ICONTENT_MAX_PER_PAGE), true
+        ) : $results;
+    }
     $sortparams = 'u.lastname ' . $sort;
     $page = (int) $page;
     $perpage = (int) $perpage;
@@ -2850,22 +3072,35 @@ function icontent_get_attempts_users($cmid, $sort, $page = 0, $perpage = ICONTEN
                                                         )";
 
         $sql = "SELECT DISTINCT $namefields,
-                                     (SELECT Sum(fraction)
+                                     (COALESCE((SELECT Sum(fraction)
                                             FROM {icontent_question_attempts}
                                          WHERE userid = u.id
-                                             AND cmid = ?) AS sumfraction,
-                         (SELECT Sum(COALESCE(NULLIF(pq2.maxmark, 0), q2.defaultmark, 1))
+                                             AND cmid = ?), 0)
+                                      + COALESCE((SELECT SUM(grade)
+                                            FROM {icontent_page_rubric_grades}
+                                         WHERE userid = u.id
+                                             AND cmid = ?
+                                             AND status = ?), 0)) AS sumfraction,
+                         (COALESCE((SELECT Sum(COALESCE(NULLIF(qa2.maxmark, 0), NULLIF(pq2.maxmark, 0), q2.defaultmark, 1))
                             FROM {icontent_question_attempts} qa2
                           INNER JOIN {icontent_pages_questions} pq2
                               ON qa2.pagesquestionsid = pq2.id
                           INNER JOIN {question} q2
                               ON qa2.questionid = q2.id
                            WHERE qa2.userid = u.id
-                             AND qa2.cmid = ?) AS maxfraction,
-                                     (SELECT Count(id)
+                             AND qa2.cmid = ?), 0)
+                          + COALESCE((SELECT SUM(maxmark)
+                            FROM {icontent_page_rubric_grades}
+                           WHERE userid = u.id
+                             AND cmid = ?), 0)) AS maxfraction,
+                                     ((SELECT Count(id)
                                             FROM {icontent_question_attempts}
                                          WHERE userid = u.id
-                                             AND cmid = ?) AS totalanswers,
+                                             AND cmid = ?)
+                                      + (SELECT Count(id)
+                                            FROM {icontent_page_rubric_grades}
+                                         WHERE userid = u.id
+                                             AND cmid = ?)) AS totalanswers,
                                      (SELECT Count(id)
                                             FROM {icontent_question_attempts} qa2
                                          WHERE userid = u.id
@@ -2888,12 +3123,29 @@ function icontent_get_attempts_users($cmid, $sort, $page = 0, $perpage = ICONTEN
                                                                      AND q.qtype = 'recordrtc'
                                                             )
                                                         )
-                                             )) AS totalopenanswers
+                                             ))
+                                      + (SELECT Count(id)
+                                            FROM {icontent_page_rubric_grades}
+                                         WHERE userid = u.id
+                                             AND cmid = ?
+                                             AND status = ?) AS totalopenanswers
                             FROM {user} u
-                INNER JOIN {icontent_question_attempts} qa
-                                ON u.id = qa.userid
-                         WHERE qa.cmid = ?";
+                INNER JOIN (
+                    SELECT userid
+                      FROM {icontent_question_attempts}
+                     WHERE cmid = ?
+                    UNION
+                    SELECT userid
+                      FROM {icontent_page_rubric_grades}
+                     WHERE cmid = ?
+                ) participants
+                        ON participants.userid = u.id
+                         WHERE 1 = 1";
     $params = [
+        $cmid,
+        $cmid,
+        ICONTENT_QTYPE_ESSAY_STATUS_VALUED,
+        $cmid,
         $cmid,
         $cmid,
         $cmid,
@@ -2901,7 +3153,10 @@ function icontent_get_attempts_users($cmid, $sort, $page = 0, $perpage = ICONTEN
         ICONTENT_QTYPE_ESSAY_STATUS_TOEVALUATE,
         ICONTENT_QTYPE_ESSAYAUTOGRADE,
         $cmid,
-    ]; // Field CMID used four times. Check (?).
+        ICONTENT_QTYPE_ESSAY_STATUS_TOEVALUATE,
+        $cmid,
+        $cmid,
+    ];
     if (!empty($groupid)) {
         $sql .= "
               AND EXISTS (
@@ -3011,38 +3266,56 @@ function icontent_get_attempts_users_with_open_answers(
                                                              AND q.qtype = 'recordrtc'
                                                     )
                                                 )
-                                        )) AS totalopenanswers
+                                        ))
+                + (SELECT Count(id)
+                     FROM {icontent_page_rubric_grades}
+                    WHERE userid = u.id
+                      AND cmid = ?
+                      AND status = ?) AS totalopenanswers
              FROM {user} u
-       INNER JOIN {icontent_question_attempts} qa
-               ON u.id = qa.userid
-            WHERE qa.cmid = ?
-                            AND (
-                                        qa.rightanswer IN (?)
-                            OR EXISTS (
-                                SELECT 1
-                                    FROM {question} q
-                                 WHERE q.id = qa.questionid
-                                     AND q.qtype = ?
-                            )
-                                        {$poodllopenanswersconditionqa}
-                                        OR (
-                                            qa.fraction = 0
-                                            AND EXISTS (
-                                                SELECT 1
-                                                    FROM {question} q
-                                                 WHERE q.id = qa.questionid
-                                                     AND q.qtype = 'recordrtc'
-                                            )
-                                        )
-                            )";
+       INNER JOIN (
+            SELECT qa.userid
+              FROM {icontent_question_attempts} qa
+             WHERE qa.cmid = ?
+               AND (
+                    qa.rightanswer IN (?)
+                    OR EXISTS (
+                        SELECT 1
+                          FROM {question} q
+                         WHERE q.id = qa.questionid
+                           AND q.qtype = ?
+                    )
+                    {$poodllopenanswersconditionqa}
+                    OR (
+                        qa.fraction = 0
+                        AND EXISTS (
+                            SELECT 1
+                              FROM {question} q
+                             WHERE q.id = qa.questionid
+                               AND q.qtype = 'recordrtc'
+                        )
+                    )
+               )
+            UNION
+            SELECT pr.userid
+              FROM {icontent_page_rubric_grades} pr
+             WHERE pr.cmid = ?
+               AND pr.status = ?
+       ) participants
+               ON participants.userid = u.id
+            WHERE 1 = 1";
     $params = [
         $cmid,
         $status,
         ICONTENT_QTYPE_ESSAYAUTOGRADE,
         $cmid,
         $status,
+        $cmid,
+        $status,
         ICONTENT_QTYPE_ESSAYAUTOGRADE,
-    ]; // Field CMID used two times. Check (?).
+        $cmid,
+        $status,
+    ];
     if (!empty($groupid)) {
         $sql .= "
               AND EXISTS (
@@ -3076,7 +3349,7 @@ function icontent_get_attempt_summary_by_page($pageid, $cmid) {
     }
 
         $sql = "SELECT Sum(qa.fraction) AS sumfraction,
-               Sum(COALESCE(NULLIF(pq.maxmark, 0), q.defaultmark, 1)) AS maxfraction,
+               Sum(COALESCE(NULLIF(qa.maxmark, 0), NULLIF(pq.maxmark, 0), q.defaultmark, 1)) AS maxfraction,
                    Count(qa.id) AS totalanswers,
                    qa.timecreated
               FROM {icontent_question_attempts} qa
@@ -3115,7 +3388,7 @@ function icontent_get_right_answers_by_attempt_summary_by_page($pageid, $cmid) {
 
         $sql = "SELECT Sum(CASE
                                WHEN qa.rightanswer = ? THEN 1
-                               WHEN qa.fraction >= COALESCE(NULLIF(pq.maxmark, 0), q.defaultmark, 1) THEN 1
+                               WHEN qa.fraction >= COALESCE(NULLIF(qa.maxmark, 0), NULLIF(pq.maxmark, 0), q.defaultmark, 1) THEN 1
                                ELSE 0
                            END) AS totalrightanswers,
                            Sum(CASE
@@ -3123,7 +3396,7 @@ function icontent_get_right_answers_by_attempt_summary_by_page($pageid, $cmid) {
                                WHEN qa.rightanswer = ? THEN 0
                                ELSE GREATEST(
                                    LEAST(
-                                       qa.fraction / COALESCE(NULLIF(pq.maxmark, 0), q.defaultmark, 1),
+                                       qa.fraction / COALESCE(NULLIF(qa.maxmark, 0), NULLIF(pq.maxmark, 0), q.defaultmark, 1),
                                        1
                                    ),
                                    0
@@ -3304,7 +3577,7 @@ function icontent_get_questions_and_open_answers_by_user($userid, $cmid, $status
                    q.qtype,
                    {$poodllselect},
                    {$recordrtcselect},
-                   pq.maxmark,
+                   COALESCE(NULLIF(qa.maxmark, 0), NULLIF(pq.maxmark, 0), q.defaultmark, 1) AS maxmark,
                    q.defaultmark,
                    pq.pageid
               FROM {icontent_question_attempts} qa
@@ -4609,7 +4882,7 @@ function icontent_get_submitted_answers_by_attempt_summary_by_page($pageid, $cmi
                    q.qtype,
                    q.generalfeedback,
                    q.generalfeedbackformat,
-                   pq.maxmark,
+                   COALESCE(NULLIF(qa.maxmark, 0), NULLIF(pq.maxmark, 0), q.defaultmark, 1) AS maxmark,
                {$poodllselect},
                {$recordrtcselect}
               FROM {icontent_question_attempts} qa
@@ -4675,9 +4948,20 @@ function icontent_get_reviewer_comments_by_attempt_summary_by_page($pageid, $cmi
  */
 function icontent_get_sumfraction_by_userid($cmid, $userid) {
     global $DB;
+    $cm = get_coursemodule_from_id('icontent', $cmid, 0, false, MUST_EXIST);
+    $icontent = $DB->get_record('icontent', ['id' => $cm->instance], '*', MUST_EXIST);
+    if (!empty($icontent->assignmentmode)) {
+        return \mod_icontent\local\assignment::get_page_score_summary($icontent, $cm, (int)$userid)->earned;
+    }
     $sql = "SELECT Sum(fraction) AS sumfraction FROM {icontent_question_attempts}  WHERE  userid = ? AND cmid = ?;";
     $grade = $DB->get_record_sql($sql, [$userid, $cmid]);
-    return $grade->sumfraction;
+    $rubric = $DB->get_field_sql(
+        "SELECT COALESCE(SUM(grade), 0)
+           FROM {icontent_page_rubric_grades}
+          WHERE userid = ? AND cmid = ? AND status = ?",
+        [$userid, $cmid, \mod_icontent\local\assignment::PAGE_RUBRIC_VALUED]
+    );
+    return (float)$grade->sumfraction + (float)$rubric;
 }
 
 /**
@@ -4716,7 +5000,16 @@ function icontent_add_pagedisplayed($pageid, $cmid) {
         $pagedisplayed->cmid = $cmid;
         $pagedisplayed->userid = $USER->id;
         $pagedisplayed->timecreated = time();
-        return $DB->insert_record('icontent_pages_displayed', $pagedisplayed);
+        $pagedisplayed->id = $DB->insert_record('icontent_pages_displayed', $pagedisplayed);
+    } else {
+        $pagedisplayed->timecreated = time();
+        $DB->update_record('icontent_pages_displayed', $pagedisplayed);
+    }
+    if (!empty($pageid)) {
+        $page = $DB->get_record('icontent_pages', ['id' => $pageid, 'cmid' => $cmid], '*', IGNORE_MISSING);
+        if ($page) {
+            \mod_icontent\local\assignment::ensure_page_rubric_review($page, (int)$USER->id);
+        }
     }
     return $pagedisplayed;
 }
@@ -4786,6 +5079,8 @@ function icontent_add_questionpage($questions, $pageid, $cmid) {
  * @param array $incorrectroutes
  * @param array $manualreviewroutes
  * @param array $defaultroutes
+ * @param array $minimumscores Minimum net percentages; zero disables the requirement.
+ * @param array $minimumscoreroutes Destinations for questions meeting the minimum score.
  * @return bool
  */
 function icontent_update_questionpage_routes(
@@ -4794,7 +5089,9 @@ function icontent_update_questionpage_routes(
     array $correctroutes,
     array $incorrectroutes,
     array $manualreviewroutes,
-    array $defaultroutes
+    array $defaultroutes,
+    array $minimumscores = [],
+    array $minimumscoreroutes = []
 ): bool {
     global $DB;
 
@@ -4802,16 +5099,19 @@ function icontent_update_questionpage_routes(
         array_map('intval', array_keys($correctroutes)),
         array_map('intval', array_keys($incorrectroutes)),
         array_map('intval', array_keys($manualreviewroutes)),
-        array_map('intval', array_keys($defaultroutes))
+        array_map('intval', array_keys($defaultroutes)),
+        array_map('intval', array_keys($minimumscores)),
+        array_map('intval', array_keys($minimumscoreroutes))
     ));
     $questionids = array_values(array_filter($questionids));
     if (empty($questionids)) {
         return false;
     }
 
+    $sourcepage = $DB->get_record('icontent_pages', ['id' => $pageid, 'cmid' => $cmid], '*', MUST_EXIST);
     $validpageids = $DB->get_records_menu(
         'icontent_pages',
-        ['cmid' => $cmid, 'hidden' => 0],
+        ['cmid' => $cmid, 'submissionid' => $sourcepage->submissionid, 'hidden' => 0],
         '',
         'id, id'
     );
@@ -4823,7 +5123,9 @@ function icontent_update_questionpage_routes(
                    correctnextpageid,
                    incorrectnextpageid,
                    manualreviewnextpageid,
-                   defaultnextpageid
+                   defaultnextpageid,
+                   minimumscore,
+                   minimumscorenextpageid
               FROM {icontent_pages_questions}
              WHERE pageid = :pageid
                AND cmid = :cmid
@@ -4846,19 +5148,31 @@ function icontent_update_questionpage_routes(
         return $value;
     };
 
-    $updated = false;
+    $updates = [];
     foreach ($mappings as $mapping) {
         $questionid = (int)$mapping->questionid;
         $newcorrect = $sanitize($correctroutes, $questionid);
         $newincorrect = $sanitize($incorrectroutes, $questionid);
         $newmanualreview = $sanitize($manualreviewroutes, $questionid);
         $newdefault = $sanitize($defaultroutes, $questionid);
+        $minimumscore = $minimumscores[$questionid] ?? $mapping->minimumscore;
+        $minimumtarget = (int)($minimumscoreroutes[$questionid] ?? $mapping->minimumscorenextpageid);
+        if (
+            !ctype_digit((string)$minimumscore) || (int)$minimumscore > 100 ||
+            ((int)$minimumscore === 0 && $minimumtarget !== 0) ||
+            ((int)$minimumscore > 0 && ($minimumtarget === $pageid || !array_key_exists($minimumtarget, $validpageids)))
+        ) {
+            throw new moodle_exception('invalidminimumscore', 'mod_icontent');
+        }
+        $minimumscore = (int)$minimumscore;
 
         if (
             (int)$mapping->correctnextpageid === $newcorrect &&
             (int)$mapping->incorrectnextpageid === $newincorrect &&
             (int)$mapping->manualreviewnextpageid === $newmanualreview &&
-            (int)$mapping->defaultnextpageid === $newdefault
+            (int)$mapping->defaultnextpageid === $newdefault &&
+            (int)$mapping->minimumscore === $minimumscore &&
+            (int)$mapping->minimumscorenextpageid === $minimumtarget
         ) {
             continue;
         }
@@ -4869,12 +5183,16 @@ function icontent_update_questionpage_routes(
             'incorrectnextpageid' => $newincorrect,
             'manualreviewnextpageid' => $newmanualreview,
             'defaultnextpageid' => $newdefault,
+            'minimumscore' => $minimumscore,
+            'minimumscorenextpageid' => $minimumtarget,
         ];
-        $DB->update_record('icontent_pages_questions', $record);
-        $updated = true;
+        $updates[] = $record;
     }
 
-    return $updated;
+    foreach ($updates as $record) {
+        $DB->update_record('icontent_pages_questions', $record);
+    }
+    return !empty($updates);
 }
 
 /**
@@ -4905,7 +5223,7 @@ function icontent_get_pagedisplayed($pageid, $cmid) {
  *
  * Returns array of questions.
  *
- * @param int $pageid
+ * @param int $pageid Page id, or zero for all pages in the activity.
  * @param int $cmid
  * @return array $questions
  */
@@ -4922,9 +5240,17 @@ function icontent_get_pagequestions($pageid, $cmid) {
               FROM {icontent_pages_questions} pq
         INNER JOIN {question} q
                 ON pq.questionid = q.id
-             WHERE pq.pageid = ?
-               AND pq.cmid = ?;';
-    return $DB->get_records_sql($sql, [$pageid, $cmid]);
+             WHERE pq.cmid = ?';
+    $params = [$cmid];
+    if ($pageid) {
+        $sql .= ' AND pq.pageid = ?';
+        $params[] = $pageid;
+    }
+    $questions = $DB->get_records_sql($sql, $params);
+    foreach ($questions as $question) {
+        $question->maxmark = icontent_get_pagequestion_maxmark($question);
+    }
+    return $questions;
 }
 
 /**
@@ -4959,23 +5285,50 @@ function icontent_get_totalquestions_by_instance($cmid) {
  * Get total maximum points by instance <iContent>.
  *
  * @param int $cmid
+ * @param int $userid Use this user's recorded maxima for previously answered questions.
  * @return float
  */
-function icontent_get_totalmaxfraction_by_instance($cmid) {
+function icontent_get_totalmaxfraction_by_instance($cmid, int $userid = 0) {
     global $DB;
-
-    $sql = "SELECT Sum(COALESCE(NULLIF(pq.maxmark, 0), q.defaultmark, 1))
-              FROM {icontent_pages_questions} pq
-        INNER JOIN {question} q
-                ON pq.questionid = q.id
-             WHERE pq.cmid = ?";
-
-    $maxfraction = $DB->get_field_sql($sql, [$cmid]);
-    if ($maxfraction === false || $maxfraction === null) {
-        return 0.0;
+    if ($userid) {
+        $cm = get_coursemodule_from_id('icontent', $cmid, 0, false, MUST_EXIST);
+        $icontent = $DB->get_record('icontent', ['id' => $cm->instance], '*', MUST_EXIST);
+        if (!empty($icontent->assignmentmode)) {
+            return \mod_icontent\local\assignment::get_page_score_summary($icontent, $cm, $userid)->maximum;
+        }
     }
 
-    return (float)$maxfraction;
+    $questions = icontent_get_pagequestions(0, $cmid);
+    $attemptmarks = [];
+    if ($userid) {
+        $attempts = $DB->get_records_sql(
+            'SELECT qa.id, qa.pagesquestionsid,
+                    COALESCE(NULLIF(qa.maxmark, 0), NULLIF(pq.maxmark, 0), q.defaultmark, 1) AS maxmark
+               FROM {icontent_question_attempts} qa
+          LEFT JOIN {icontent_pages_questions} pq ON pq.id = qa.pagesquestionsid
+          LEFT JOIN {question} q ON q.id = qa.questionid
+              WHERE qa.cmid = ? AND qa.userid = ?
+           ORDER BY qa.timecreated ASC, qa.id ASC',
+            [$cmid, $userid]
+        );
+        foreach ($attempts as $attempt) {
+            if ((float)$attempt->maxmark > 0) {
+                $attemptmarks[(int)$attempt->pagesquestionsid] = (float)$attempt->maxmark;
+            }
+        }
+    }
+    $maxfraction = 0.0;
+    foreach ($questions as $question) {
+        $maxfraction += $attemptmarks[(int)$question->qpid] ?? (float)$question->maxmark;
+    }
+    $rubricmax = $DB->get_field_sql(
+        "SELECT COALESCE(SUM(rubricmaxmark), 0)
+           FROM {icontent_pages}
+          WHERE cmid = ? AND userubric = 1 AND submissionid = 0",
+        [$cmid]
+    );
+
+    return (float)$maxfraction + (float)$rubricmax;
 }
 
 /**
@@ -5285,7 +5638,7 @@ function icontent_has_permission_manager($context) {
  */
 function icontent_check_user_isowner_note($pagenote) {
     global $USER;
-    if ($USER->id === $pagenote->userid) {
+    if ((int)$USER->id === (int)$pagenote->userid) {
         return true;
     }
     return false;
@@ -5465,7 +5818,12 @@ function icontent_make_button_previous_page($button, $tpages, $icon = null) {
     ];
     $url = '#';
     if (!empty($pagepreviousid)) {
-        $url = new moodle_url('/mod/icontent/view.php', ['id' => $button->cmid, 'pageid' => $pagepreviousid]);
+        $url = new moodle_url('/mod/icontent/view.php', [
+            'id' => $button->cmid,
+            'pageid' => $pagepreviousid,
+            'submissionid' => $objpage->submissionid,
+            'sourcepageid' => $objpage->id,
+        ]);
     }
     if (!$pageprevious) {
         $attributes['disabled'] = 'disabled';
@@ -5515,7 +5873,12 @@ function icontent_make_button_next_page($button, $tpages, $icon = null) {
     ];
     $url = '#';
     if (!empty($nextpageid)) {
-        $url = new moodle_url('/mod/icontent/view.php', ['id' => $button->cmid, 'pageid' => $nextpageid]);
+        $url = new moodle_url('/mod/icontent/view.php', [
+            'id' => $button->cmid,
+            'pageid' => $nextpageid,
+            'submissionid' => $objpage->submissionid,
+            'sourcepageid' => $objpage->id,
+        ]);
     }
     if (!$nextpage) {
         $attributes['disabled'] = 'disabled';
@@ -6776,6 +7139,7 @@ function icontent_make_toolbar($page, $icontent) {
             $addquestionparams = [
                 'id' => $page->cmid,
                 'pageid' => $page->id,
+                'submissionid' => (int)($page->submissionid ?? 0),
             ];
             $questioncategoryid = icontent_get_page_primary_questioncategoryid((int)$page->id, (int)$page->cmid);
             if (!empty($questioncategoryid)) {
@@ -7043,21 +7407,23 @@ function icontent_make_page_tags_area($objpage) {
  * Returns a string with the cover page.
  *
  * @param object $icontent
- * @param object $objpage
+ * @param object $objpage Page with already formatted pageicontent.
  * @param object $context
+ * @param int $sourcepageid
  * @return string $coverpage
  */
-function icontent_make_cover_page($icontent, $objpage, $context) {
+function icontent_make_cover_page($icontent, $objpage, $context, int $sourcepageid = 0) {
     $limitcharshow = 500;
     $displaynone = false;
-    $strcontent = strip_tags($objpage->pageicontent);
-    $tchars = strlen($strcontent);
+    $strcontent = html_to_text($objpage->pageicontent, 0, false);
+    $tchars = core_text::strlen($strcontent);
     if ($tchars > $limitcharshow) {
-        $chars = html_writer::start_tag('p', ['class' => 'read-more-wrap']);
-        $chars .= substr($strcontent, 0, $limitcharshow);
-        $chars .= html_writer::span('...', 'suspension-points');
-        $chars .= html_writer::span(substr($strcontent, $limitcharshow, $tchars), 'read-more-target');
-        $chars .= html_writer::end_tag('p');
+        // Keep filtered widgets intact and render each only once.
+        $chars = html_writer::div(
+            s(core_text::substr($strcontent, 0, $limitcharshow)) . '...',
+            'suspension-points'
+        );
+        $chars .= html_writer::div($objpage->pageicontent, 'read-more-target');
         $buttons = html_writer::link(
             null,
             '<i class="fa fa-plus"></i>&nbsp;' . get_string('showmore', 'mod_icontent'),
@@ -7074,9 +7440,13 @@ function icontent_make_cover_page($icontent, $objpage, $context) {
         );
         $chars .= html_writer::div($buttons, 'state-readmore');
     } else {
-        $chars = html_writer::tag('p', $strcontent);
+        $chars = $objpage->pageicontent;
         // Checks if content is empty.
-        $nospace = str_replace('&nbsp;', '', $strcontent);
+        $nospace = strip_tags(
+            $chars,
+            '<img><audio><video><iframe><object><embed><svg><canvas><input><button>'
+        );
+        $nospace = str_replace('&nbsp;', '', $nospace);
         $nospace = str_replace('.', '', $nospace);
         $nospace = trim($nospace);
         // Add class 'hide' to hide element and builds the page.
@@ -7088,6 +7458,7 @@ function icontent_make_cover_page($icontent, $objpage, $context) {
     $title = html_writer::tag('h1', $objpage->title, ['class' => 'titlecoverpage']);
     $header = $objpage->showtitle ? html_writer::div($title, 'headercoverpage row ') : false;
     $content = html_writer::div($chars, "contentcoverpage " . $displaynone);
+    $content .= \mod_icontent\local\assignment::render_page_results($objpage, $icontent, $context);
     $tagsarea = icontent_make_page_tags_area($objpage);
     $coverpage = html_writer::tag(
         'div',
@@ -7096,10 +7467,12 @@ function icontent_make_cover_page($icontent, $objpage, $context) {
             'class' => 'fulltextpage coverpage',
             'data-pageid' => $objpage->id,
             'data-pagenum' => $objpage->pagenum,
+            'data-sourcepageid' => $sourcepageid,
             'style' => icontent_get_page_style($icontent, $objpage, $context),
         ]
     );
     // Set page preview, log event and return page.
+    icontent_add_pagedisplayed($objpage->id, $objpage->cmid);
     icontent_add_pagedisplayed($objpage->id, $objpage->cmid);
     \mod_icontent\event\page_viewed::create_from_page($icontent, $context, $objpage)->trigger();
     return $coverpage;
@@ -7113,11 +7486,12 @@ function icontent_make_cover_page($icontent, $objpage, $context) {
  * @param int $pagenum or $startpage
  * @param object $icontent
  * @param object $context
- * @param object $sourcepageid
+ * @param int $sourcepageid
+ * @param int $submissionid Submission id, or zero for shared reference pages.
  * @return object $fullpage
  */
 function icontent_get_fullpageicontent($pagenum, $icontent, $context, $sourcepageid = 0, int $submissionid = 0) {
-    global $DB, $CFG;
+    global $DB, $CFG, $USER;
 
     // Get page.
     $objpage = $DB->get_record('icontent_pages', [
@@ -7136,9 +7510,27 @@ function icontent_get_fullpageicontent($pagenum, $icontent, $context, $sourcepag
         );
         return $objpage;
     }
+    $objpage->pageicontent = file_rewrite_pluginfile_urls(
+        $objpage->pageicontent,
+        'pluginfile.php',
+        $context->id,
+        'mod_icontent',
+        'page',
+        $objpage->id
+    );
+    $objpage->pageicontent = icontent_replace_dynamic_page_placeholders($objpage->pageicontent, $context);
+    $objpage->pageicontent = format_text(
+        $objpage->pageicontent,
+        $objpage->pageicontentformat,
+        [
+            'noclean' => empty($objpage->submissionid),
+            'overflowdiv' => false,
+            'context' => $context,
+        ]
+    );
     if ($objpage->coverpage) {
         // Make cover page.
-        $objpage->fullpageicontent = icontent_make_cover_page($icontent, $objpage, $context);
+        $objpage->fullpageicontent = icontent_make_cover_page($icontent, $objpage, $context, (int)$sourcepageid);
         // Control button.
         $objpage->previous = icontent_get_prev_pagenum($objpage);
         $objpage->next = icontent_get_next_pagenum($objpage);
@@ -7165,24 +7557,6 @@ function icontent_get_fullpageicontent($pagenum, $icontent, $context, $sourcepag
         ]
     ) : false;
     // Make content.
-    $objpage->pageicontent = file_rewrite_pluginfile_urls(
-        $objpage->pageicontent,
-        'pluginfile.php',
-        $context->id,
-        'mod_icontent',
-        'page',
-        $objpage->id
-    );
-    $objpage->pageicontent = icontent_replace_dynamic_page_placeholders($objpage->pageicontent, $context);
-    $objpage->pageicontent = format_text(
-        $objpage->pageicontent,
-        $objpage->pageicontentformat,
-        [
-            'noclean' => empty($objpage->submissionid),
-            'overflowdiv' => false,
-            'context' => $context,
-        ]
-    );
     $objpage->pageicontent = html_writer::div($objpage->pageicontent, 'page-layout columns-' . $objpage->layout);
     // Element page number.
     $npage = html_writer::tag('div', get_string('page', 'icontent', $objpage->pagenum), ['class' => 'pagenum']);
@@ -7198,6 +7572,17 @@ function icontent_get_fullpageicontent($pagenum, $icontent, $context, $sourcepag
             'id' => 'idicontent-recordrtc-settings',
             'value' => json_encode($recordrtcsettings, JSON_UNESCAPED_SLASHES),
         ]);
+    }
+    $rubricarea = '';
+    if (!empty($objpage->userubric)) {
+        $review = \mod_icontent\local\assignment::ensure_page_rubric_review($objpage, (int)$USER->id);
+        $reviewid = ($review && $review->status === \mod_icontent\local\assignment::PAGE_RUBRIC_VALUED)
+            ? (int)$review->id : 0;
+        $rubricarea = \mod_icontent\local\assignment::render_page_rubric($context, $icontent, $reviewid);
+    }
+    $resultsarea = \mod_icontent\local\assignment::render_page_results($objpage, $icontent, $context);
+    if ($resultsarea !== '') {
+        $rubricarea = '';
     }
     // Form notes.
     $notesarea = icontent_make_notesarea($objpage, $icontent);
@@ -7218,6 +7603,8 @@ function icontent_get_fullpageicontent($pagenum, $icontent, $context, $sourcepag
         $progbar .
         $qtsareas .
         $recordrtcsettingshtml .
+        $resultsarea .
+        $rubricarea .
         $notesarea .
         $tarea .
         $script,
@@ -7225,6 +7612,7 @@ function icontent_get_fullpageicontent($pagenum, $icontent, $context, $sourcepag
             'class' => 'fulltextpage',
             'data-pageid' => $objpage->id,
             'data-pagenum' => $objpage->pagenum,
+            'data-sourcepageid' => (int)$sourcepageid,
             'style' => icontent_get_page_style($icontent, $objpage, $context),
         ]
     );

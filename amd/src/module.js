@@ -27,8 +27,9 @@ define(['jquery', 'jqueryui', 'mod_icontent/cookiehandler'], function($, jqui, c
      *
      * @param {number|string} cmid
      * @param {number|string} pageid
+     * @param {number|string} sourcepageid
      */
-    function getDeepLink(cmid, pageid) {
+    function getDeepLink(cmid, pageid, sourcepageid) {
         if (!cmid || !pageid) {
             return '#';
         }
@@ -36,6 +37,11 @@ define(['jquery', 'jqueryui', 'mod_icontent/cookiehandler'], function($, jqui, c
         var url = new URL(window.location.href);
         url.searchParams.set('id', cmid);
         url.searchParams.set('pageid', pageid);
+        if (sourcepageid) {
+            url.searchParams.set('sourcepageid', sourcepageid);
+        } else {
+            url.searchParams.delete('sourcepageid');
+        }
         url.hash = '';
         return url.toString();
     }
@@ -67,11 +73,12 @@ define(['jquery', 'jqueryui', 'mod_icontent/cookiehandler'], function($, jqui, c
      */
     function onUpdateDeepLink(cmid, replace) {
         var pageid = $('.fulltextpage').attr('data-pageid');
+        var sourcepageid = $('.fulltextpage').attr('data-sourcepageid');
         if (!cmid || !pageid || !window.history || !window.history.replaceState) {
             return;
         }
 
-        var url = getDeepLink(cmid, pageid);
+        var url = getDeepLink(cmid, pageid, sourcepageid);
 
         if (replace) {
             window.history.replaceState({}, '', url);
@@ -654,6 +661,18 @@ define(['jquery', 'jqueryui', 'mod_icontent/cookiehandler'], function($, jqui, c
             url: "ajax.php", // Relative or absolute path to ajax.php file
             data: postdata,
             success: function(data) {
+                if (data.error) {
+                    var $container = $(".icontent-page");
+                    $container.find('.loading').remove();
+                    $container.css('opacity', '');
+                    onBtnActiveEnableDisableClick($('.fulltextpage').attr('data-pagenum'));
+                    $container.prepend(
+                        $('<div />').addClass('alert alert-warning page-grading-warning')
+                            .attr('role', 'alert').text(data.error)
+                    );
+                    return;
+                }
+                $(".page-grading-warning").remove();
                 if (data.transitioneffect !== "0") {
                     $(".icontent-page").hide();
                     $(".icontent-page").html(data.fullpageicontent);
@@ -696,13 +715,14 @@ define(['jquery', 'jqueryui', 'mod_icontent/cookiehandler'], function($, jqui, c
         var $btnprev = $('.icontent-buttonbar .btn-previous-page');
         var $btnnext = $('.icontent-buttonbar .btn-next-page');
         var cmid = $btnprev.attr('data-cmid') || $btnnext.attr('data-cmid') || $('.load-page[data-cmid]:first').attr('data-cmid');
+        var sourcepageid = $('.fulltextpage').attr('data-pageid');
 
         if ($data.previous) {
             onSetControlDisabled($btnprev, false);
             $btnprev.attr("data-pagenum", $data.previous);
             if ($data.previouspageid) {
                 $btnprev.attr('data-pageid', $data.previouspageid);
-                $btnprev.attr('href', getDeepLink(cmid, $data.previouspageid));
+                $btnprev.attr('href', getDeepLink(cmid, $data.previouspageid, sourcepageid));
             }
         } else {
             onSetControlDisabled($btnprev, true);
@@ -715,7 +735,7 @@ define(['jquery', 'jqueryui', 'mod_icontent/cookiehandler'], function($, jqui, c
             $btnnext.attr("data-pagenum", $data.next);
             if ($data.nextpageid) {
                 $btnnext.attr('data-pageid', $data.nextpageid);
-                $btnnext.attr('href', getDeepLink(cmid, $data.nextpageid));
+                $btnnext.attr('href', getDeepLink(cmid, $data.nextpageid, sourcepageid));
             }
         } else {
             onSetControlDisabled($btnnext, true);

@@ -55,6 +55,16 @@ class provider implements
      * @return collection Returns the collection of metadata.
      */
     public static function get_metadata(collection $collection): collection {
+        $collection->add_subsystem_link('core_question', [], 'privacy:metadata:core_question');
+        $collection->add_database_table(
+            'icontent_mobile_usages',
+            [
+                'userid' => 'privacy:metadata:icontent_question_attempts:userid',
+                'pageid' => 'privacy:metadata:icontent_pages_displayed:pageid',
+                'qubaid' => 'privacy:metadata:mobileusage',
+            ],
+            'privacy:metadata:mobileusage'
+        );
         $collection->add_database_table(
             'icontent_pages_notes',
             [
@@ -104,11 +114,28 @@ class provider implements
                 'userid' => 'privacy:metadata:icontent_question_attempts:userid',
                 'cmid' => 'privacy:metadata:icontent_question_attempts:cmid',
                 'fraction' => 'privacy:metadata:icontent_question_attempts:fraction',
+                'maxmark' => 'privacy:metadata:icontent_question_attempts:maxmark',
                 'rightanswer' => 'privacy:metadata:icontent_question_attempts:rightanswer',
                 'answertext' => 'privacy:metadata:icontent_question_attempts:answertext',
                 'timecreated' => 'privacy:metadata:icontent_question_attempts:timecreated',
             ],
             'privacy:metadata:icontent_question_attempts'
+        );
+
+        $collection->add_database_table(
+            'icontent_page_rubric_grades',
+            [
+                'pageid' => 'privacy:metadata:icontent_page_rubric_grades:pageid',
+                'userid' => 'privacy:metadata:icontent_page_rubric_grades:userid',
+                'cmid' => 'privacy:metadata:icontent_page_rubric_grades:cmid',
+                'status' => 'privacy:metadata:icontent_page_rubric_grades:status',
+                'grade' => 'privacy:metadata:icontent_page_rubric_grades:grade',
+                'feedback' => 'privacy:metadata:icontent_page_rubric_grades:feedback',
+                'grader' => 'privacy:metadata:icontent_page_rubric_grades:grader',
+                'timecreated' => 'privacy:metadata:icontent_page_rubric_grades:timecreated',
+                'timemodified' => 'privacy:metadata:icontent_page_rubric_grades:timemodified',
+            ],
+            'privacy:metadata:icontent_page_rubric_grades'
         );
 
         $collection->add_database_table(
@@ -195,6 +222,7 @@ class provider implements
                         'useridlikes' => $userid,
                         'useriddisplayed' => $userid,
                         'useridattempts' => $userid,
+                        'useridmobile' => $userid,
                         'useridgrades' => $userid,
                         'useridsubmissions' => $userid,
                         'useridgroupmembers' => $userid,
@@ -219,6 +247,9 @@ class provider implements
                  LEFT JOIN {icontent_question_attempts} qa
                                 ON qa.cmid = cm.id
                              AND qa.userid = :useridattempts
+                 LEFT JOIN {icontent_mobile_usages} mu
+                                ON mu.cmid = cm.id
+                             AND mu.userid = :useridmobile
                  LEFT JOIN {icontent_grades} g
                                 ON g.cmid = cm.id
                              AND g.userid = :useridgrades
@@ -234,6 +265,7 @@ class provider implements
                                 OR l.id IS NOT NULL
                                 OR d.id IS NOT NULL
                                 OR qa.id IS NOT NULL
+                                OR mu.id IS NOT NULL
                                 OR g.id IS NOT NULL
                                 OR s.id IS NOT NULL
                 ';
@@ -277,6 +309,8 @@ class provider implements
                         UNION
                         SELECT userid FROM {icontent_question_attempts} WHERE cmid = :cmid
                         UNION
+                        SELECT userid FROM {icontent_mobile_usages} WHERE cmid = :cmid
+                        UNION
                         SELECT userid FROM {icontent_grades} WHERE cmid = :cmid
                         UNION
                         SELECT userid FROM {icontent_submissions}
@@ -289,7 +323,14 @@ class provider implements
                         UNION
                         SELECT grader FROM {icontent_submissions}
                          WHERE icontentid = :gradericontentid AND grader > 0
+                        UNION
+                        SELECT userid FROM {icontent_page_rubric_grades} WHERE cmid = :rubriccmid
+                        UNION
+                        SELECT grader FROM {icontent_page_rubric_grades}
+                         WHERE cmid = :rubricgradercmid AND grader > 0
                 ';
+                $params['rubriccmid'] = (int)$cm->id;
+                $params['rubricgradercmid'] = (int)$cm->id;
                 $params['icontentid'] = (int)$cm->instance;
                 $params['groupicontentid'] = (int)$cm->instance;
                 $params['gradericontentid'] = (int)$cm->instance;
@@ -341,6 +382,11 @@ class provider implements
             );
             $grades = $DB->get_records(
                 'icontent_grades',
+                ['cmid' => $cm->id, 'userid' => $userid],
+                'timemodified DESC'
+            );
+            $pagerubricgrades = $DB->get_records(
+                'icontent_page_rubric_grades',
                 ['cmid' => $cm->id, 'userid' => $userid],
                 'timemodified DESC'
             );
@@ -408,6 +454,7 @@ class provider implements
                         'pagesquestionsid' => $attempt->pagesquestionsid,
                         'questionid' => $attempt->questionid,
                         'fraction' => $attempt->fraction,
+                        'maxmark' => $attempt->maxmark,
                         'rightanswer' => $attempt->rightanswer,
                         'answertext' => $attempt->answertext,
                         'timecreated' => $attempt->timecreated ? transform::datetime($attempt->timecreated) : '',
@@ -420,6 +467,17 @@ class provider implements
                         'timemodified' => $grade->timemodified ? transform::datetime($grade->timemodified) : '',
                     ];
                 }, array_values($grades)),
+                'pagerubricgrades' => array_map(static function ($review) {
+                    return (object) [
+                        'pageid' => (int)$review->pageid,
+                        'status' => $review->status,
+                        'grade' => $review->grade,
+                        'maxmark' => $review->maxmark,
+                        'feedback' => $review->feedback,
+                        'timecreated' => $review->timecreated ? transform::datetime($review->timecreated) : '',
+                        'timemodified' => $review->timemodified ? transform::datetime($review->timemodified) : '',
+                    ];
+                }, array_values($pagerubricgrades)),
                 'assignmentsubmissions' => array_map(static function ($submission) {
                     return (object)[
                         'groupid' => (int)$submission->groupid,
@@ -460,6 +518,30 @@ class provider implements
             ];
 
             self::export_icontent_data_for_user($export, $cm->id, $contextlist->get_user());
+            foreach ($DB->get_records('icontent_mobile_usages', ['cmid' => $cm->id, 'userid' => $userid]) as $usage) {
+                $options = new \question_display_options();
+                $options->readonly = true;
+                $options->feedback = $options->generalfeedback = $options->rightanswer =
+                    $usage->timecompleted ? \question_display_options::VISIBLE : \question_display_options::HIDDEN;
+                \core_question\privacy\provider::export_question_usage(
+                    (int)$userid, $context, ['Mobile questions', (int)$usage->pageid],
+                    (int)$usage->qubaid, $options, true
+                );
+            }
+            foreach ($submissions as $submission) {
+                \core_grading\privacy\provider::export_item_data(
+                    $context,
+                    (int)$submission->id,
+                    [get_string('gradingareasubmission', 'icontent'), (int)$submission->id]
+                );
+            }
+            foreach ($pagerubricgrades as $review) {
+                \core_grading\privacy\provider::export_item_data(
+                    $context,
+                    \mod_icontent\local\assignment::page_rubric_itemid((int)$review->id),
+                    [get_string('rubricpages', 'icontent'), (int)$review->pageid]
+                );
+            }
         }
     }
 
@@ -546,6 +628,7 @@ class provider implements
         $context = \context_module::instance($cmid);
         $fs = get_file_storage();
         foreach ($pageids as $pageid) {
+            \mod_icontent\local\mobile_questions::delete(['pageid' => $pageid]);
             \core_tag_tag::remove_all_item_tags('mod_icontent', 'icontent_pages', (int)$pageid);
             $fs->delete_area_files($context->id, 'mod_icontent', 'page', (int)$pageid);
             $fs->delete_area_files($context->id, 'mod_icontent', 'bgpage', (int)$pageid);
@@ -621,6 +704,7 @@ class provider implements
             return;
         }
 
+        \mod_icontent\local\mobile_questions::delete(['cmid' => $cm->id]);
         $DB->delete_records('icontent_pages_notes_like', ['cmid' => $cm->id]);
         $DB->delete_records('icontent_pages_notes', ['cmid' => $cm->id]);
         $DB->delete_records('icontent_pages_displayed', ['cmid' => $cm->id]);
@@ -633,6 +717,8 @@ class provider implements
             ['icontentid' => (int)$cm->instance]
         );
         self::delete_submission_pages((int)$cm->id, $submissionids);
+        self::delete_rubric_fillings($context, null);
+        $DB->delete_records('icontent_page_rubric_grades', ['cmid' => $cm->id]);
         $DB->delete_records('icontent_submissions', ['icontentid' => $cm->instance]);
     }
 
@@ -657,6 +743,7 @@ class provider implements
                 continue;
             }
             self::delete_user_notes((int)$cm->id, [(int)$userid]);
+            \mod_icontent\local\mobile_questions::delete(['cmid' => $cm->id, 'userid' => $userid]);
             $DB->delete_records('icontent_pages_displayed', ['cmid' => $cm->id, 'userid' => $userid]);
             $DB->delete_records('icontent_question_attempts', ['cmid' => $cm->id, 'userid' => $userid]);
             $DB->delete_records('icontent_grades', ['cmid' => $cm->id, 'userid' => $userid]);
@@ -668,6 +755,8 @@ class provider implements
                 ['icontentid' => (int)$cm->instance, 'userid' => $userid]
             );
             self::delete_submission_pages((int)$cm->id, $submissionids);
+            self::delete_rubric_fillings($context, $submissionids);
+            self::delete_page_rubric_grades($context, [(int)$userid]);
             if ($submissionids) {
                 [$insql, $inparams] = $DB->get_in_or_equal($submissionids, SQL_PARAMS_NAMED, 'privacy_sub');
                 $DB->delete_records_select(
@@ -709,6 +798,9 @@ class provider implements
         [$insql, $inparams] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED);
 
         self::delete_user_notes((int)$cm->id, $userids);
+        foreach ($userids as $userid) {
+            \mod_icontent\local\mobile_questions::delete(['cmid' => $cm->id, 'userid' => $userid]);
+        }
         $DB->delete_records_select(
             'icontent_pages_displayed',
             "userid $insql AND cmid = :cmid",
@@ -732,6 +824,8 @@ class provider implements
             array_merge(['icontentid' => (int)$cm->instance], $inparams)
         );
         self::delete_submission_pages((int)$cm->id, $submissionids);
+        self::delete_rubric_fillings($context, $submissionids);
+        self::delete_page_rubric_grades($context, array_map('intval', $userids));
         if ($submissionids) {
             [$submissioninsql, $submissioninparams] = $DB->get_in_or_equal(
                 $submissionids,
@@ -746,6 +840,71 @@ class provider implements
             0,
             "icontentid = :icontentid AND grader $insql",
             array_merge(['icontentid' => (int)$cm->instance], $inparams)
+        );
+    }
+
+    /**
+     * Delete built-in rubric fillings stored against submission ids.
+     *
+     * A null id list deletes every filling in the module context. An empty list deletes nothing.
+     *
+     * @param \context $context Module context.
+     * @param int[]|null $submissionids Submission ids, or null for the whole context.
+     */
+    private static function delete_rubric_fillings(\context $context, ?array $submissionids = []): void {
+        global $CFG;
+        require_once($CFG->dirroot . '/grade/grading/lib.php');
+        if ($submissionids === null) {
+            \core_grading\privacy\provider::delete_instance_data($context);
+            return;
+        }
+        if (!$submissionids) {
+            return;
+        }
+        \core_grading\privacy\provider::delete_data_for_instances($context, array_map('intval', $submissionids));
+    }
+
+    /**
+     * Delete page-rubric reviews and their grading instances for the selected users.
+     *
+     * @param \context $context Module context.
+     * @param int[] $userids User ids.
+     */
+    private static function delete_page_rubric_grades(\context $context, array $userids): void {
+        global $DB;
+
+        if (!$userids || $context->contextlevel != CONTEXT_MODULE) {
+            return;
+        }
+        if (!$cm = get_coursemodule_from_id('icontent', $context->instanceid)) {
+            return;
+        }
+        [$insql, $inparams] = $DB->get_in_or_equal(array_map('intval', $userids), SQL_PARAMS_NAMED);
+        $params = array_merge($inparams, ['cmid' => (int)$cm->id]);
+        $reviewids = $DB->get_fieldset_select(
+            'icontent_page_rubric_grades',
+            'id',
+            "cmid = :cmid AND userid $insql",
+            $params
+        );
+        if ($reviewids) {
+            $itemids = array_map(
+                static fn(int $reviewid): int => \mod_icontent\local\assignment::page_rubric_itemid($reviewid),
+                array_map('intval', $reviewids)
+            );
+            \core_grading\privacy\provider::delete_data_for_instances($context, $itemids);
+        }
+        $DB->delete_records_select(
+            'icontent_page_rubric_grades',
+            "cmid = :cmid AND userid $insql",
+            $params
+        );
+        $DB->set_field_select(
+            'icontent_page_rubric_grades',
+            'grader',
+            0,
+            "cmid = :cmid AND grader $insql",
+            $params
         );
     }
 }

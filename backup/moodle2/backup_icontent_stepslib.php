@@ -135,6 +135,8 @@ class backup_icontent_activity_structure_step extends backup_questions_activity_
             'hidden',
             'maxnotesperpages',
             'attemptsallowed',
+            'userubric',
+            'rubricmaxmark',
             'prevmode',
             'prevpageid',
             'nextmode',
@@ -199,6 +201,8 @@ class backup_icontent_activity_structure_step extends backup_questions_activity_
             'incorrectnextpageid',
             'manualreviewnextpageid',
             'defaultnextpageid',
+            'minimumscore',
+            'minimumscorenextpageid',
             ]
         );
 
@@ -217,6 +221,7 @@ class backup_icontent_activity_structure_step extends backup_questions_activity_
             'userid',
             'cmid',
             'fraction',
+            'maxmark',
             'rightanswer',
             'answertext',
             'answertextformat',

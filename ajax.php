@@ -71,10 +71,12 @@ $PAGE->set_url('/mod/icontent/ajax.php', $pageurlparams);
 $return = false;
 switch ($action) {
     case 'loadpage':
+        require_once(__DIR__ . '/locallib.php');
         require_capability('mod/icontent:view', $context);
         $pagenum = required_param('pagenum', PARAM_INT);
         $sourcepageid = optional_param('sourcepageid', 0, PARAM_INT);
         $submissionid = 0;
+        $sourcepage = null;
         if (!empty($icontent->assignmentmode)) {
             if ($sourcepageid) {
                 $sourcepage = $DB->get_record('icontent_pages', [
@@ -104,7 +106,22 @@ switch ($action) {
                 }
             }
         }
-        $return = icontent_ajax_getpage($pagenum, $icontent, $context, $sourcepageid, $submissionid);
+        $sourcepage = assignment::get_last_viewed_page((int)$cm->id, (int)$USER->id, $submissionid);
+        $sourcepageid = $sourcepage ? (int)$sourcepage->id : 0;
+        $targetpageid = icontent_get_pageid_by_pagenum($cm->id, $pagenum, $submissionid);
+        $targetpage = $targetpageid ? $DB->get_record('icontent_pages', [
+            'id' => $targetpageid,
+            'cmid' => $cm->id,
+            'icontentid' => $icontent->id,
+            'submissionid' => $submissionid,
+        ], '*', IGNORE_MISSING) : false;
+        if ($sourcepage && $targetpage &&
+                !has_any_capability(['mod/icontent:edit', 'mod/icontent:manage', 'mod/icontent:grade'], $context) &&
+                !assignment::can_navigate_to_page($sourcepage, $targetpage, (int)$USER->id)) {
+            $return = (object)['error' => get_string('pagegradingrequired', 'mod_icontent')];
+        } else {
+            $return = icontent_ajax_getpage($pagenum, $icontent, $context, $sourcepageid, $submissionid);
+        }
         break;
         // Save and return records table {pages_notes}.
     case 'savereturnpagenotes':

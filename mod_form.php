@@ -282,6 +282,15 @@ class mod_icontent_mod_form extends moodleform_mod {
 
         // Show the standard Grade elements.
         $this->standard_grading_coursemodule_elements();
+        if ($mform->elementExists('advancedgradingmethod_submission')) {
+            // Keep every activity on Moodle's built-in rubric. Other gradingform plugins stay unused.
+            $rubricmethods = [
+                '' => get_string('gradingmethodnone', 'core_grading'),
+                'rubric' => get_string('pluginname', 'gradingform_rubric'),
+            ];
+            $mform->getElement('advancedgradingmethod_submission')->load($rubricmethods);
+            $mform->hideIf('advancedgradingmethod_submission', 'assignmentmode', 'eq', 0);
+        }
 
         // Add standard elements, common to all modules.
         $this->standard_coursemodule_elements();

@@ -206,6 +206,195 @@ final class provider_test extends provider_testcase {
     }
 
     /**
+     * Built-in rubric fillings are exported with a submission and removed with it.
+     */
+    public function test_rubric_fillings_follow_submission_privacy(): void {
+        global $CFG, $DB;
+
+        $course = $this->getDataGenerator()->create_course();
+        $teacher = $this->getDataGenerator()->create_user();
+        $student = $this->getDataGenerator()->create_user();
+        $other = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($teacher->id, $course->id, 'editingteacher');
+        $module = $this->getDataGenerator()->create_module('icontent', [
+            'course' => $course->id,
+            'assignmentmode' => 1,
+            'grade' => 100,
+        ]);
+        $cm = get_coursemodule_from_id('icontent', $module->cmid, 0, false, MUST_EXIST);
+        $context = \context_module::instance($cm->id);
+        $now = time();
+        $submissionid = (int)$DB->insert_record('icontent_submissions', (object)[
+            'icontentid' => $module->id,
+            'userid' => $student->id,
+            'groupid' => 0,
+            'status' => 'graded',
+            'timesubmitted' => $now,
+            'timecreated' => $now,
+            'timemodified' => $now,
+            'feedbackformat' => FORMAT_PLAIN,
+            'grader' => $teacher->id,
+            'timegraded' => $now,
+        ]);
+        $othersubmissionid = (int)$DB->insert_record('icontent_submissions', (object)[
+            'icontentid' => $module->id,
+            'userid' => $other->id,
+            'groupid' => 0,
+            'status' => 'graded',
+            'timesubmitted' => $now,
+            'timecreated' => $now,
+            'timemodified' => $now,
+            'feedbackformat' => FORMAT_PLAIN,
+            'grader' => $teacher->id,
+            'timegraded' => $now,
+        ]);
+
+        $this->setUser($teacher);
+        require_once($CFG->libdir . '/gradelib.php');
+        $rubric = $this->getDataGenerator()->get_plugin_generator('gradingform_rubric')
+            ->get_test_rubric($context, 'mod_icontent', 'submission');
+        $rubric->set_grade_range(make_grades_menu(100), true);
+        $studentinstance = null;
+        foreach ([$submissionid, $othersubmissionid] as $itemid) {
+            $instance = $rubric->get_or_create_instance(0, (int)$teacher->id, $itemid);
+            if ($itemid === $submissionid) {
+                $studentinstance = $instance;
+            }
+            $formdata = $this->getDataGenerator()->get_plugin_generator('gradingform_rubric')->get_test_form_data(
+                $rubric,
+                $itemid,
+                2,
+                'No mistakes',
+                1,
+                'One picture'
+            );
+            $instance->submit_and_get_grade($formdata, $itemid);
+        }
+        $this->assertSame(2, $DB->count_records('grading_instances'));
+
+        $this->export_context_data_for_user((int)$student->id, $context, 'mod_icontent');
+        $writer = \core_privacy\local\request\writer::with_context($context);
+        $exported = $writer->get_data([
+            get_string('gradingareasubmission', 'icontent'),
+            $submissionid,
+            get_string('rubric', 'gradingform_rubric'),
+            $studentinstance->get_id(),
+        ]);
+        $this->assertNotEmpty($exported);
+        $remarks = array_column((array)$exported, 'remark');
+        $this->assertContains('No mistakes', $remarks);
+
+        $fillings = $DB->get_records_sql(
+            'SELECT rf.id, rf.remark
+               FROM {gradingform_rubric_fillings} rf
+               JOIN {grading_instances} gi ON gi.id = rf.instanceid
+              WHERE gi.itemid = :itemid',
+            ['itemid' => $submissionid]
+        );
+        $this->assertNotEmpty($fillings);
+
+        provider::delete_data_for_user(new approved_contextlist($student, 'mod_icontent', [$context->id]));
+        $this->assertSame(0, $DB->count_records_sql(
+            'SELECT COUNT(1)
+               FROM {grading_instances}
+              WHERE itemid = :itemid',
+            ['itemid' => $submissionid]
+        ));
+        $this->assertSame(1, $DB->count_records_sql(
+            'SELECT COUNT(1)
+               FROM {grading_instances}
+              WHERE itemid = :itemid',
+            ['itemid' => $othersubmissionid]
+        ));
+
+        provider::delete_data_for_all_users_in_context($context);
+        $this->assertSame(0, $DB->count_records('grading_instances'));
+    }
+
+    /**
+     * Deleting a user removes that user's page-rubric review only.
+     */
+    public function test_page_rubric_grades_follow_user_privacy(): void {
+        global $DB;
+
+        [$module, $context, $pageid] = $this->create_icontent_page_and_questionmap();
+        $student = $this->getDataGenerator()->create_user();
+        $other = $this->getDataGenerator()->create_user();
+        foreach ([$student, $other] as $user) {
+            $DB->insert_record('icontent_page_rubric_grades', (object)[
+                'pageid' => $pageid,
+                'cmid' => $module->cmid,
+                'userid' => $user->id,
+                'status' => 'toevaluate',
+                'maxmark' => 1,
+                'feedbackformat' => FORMAT_PLAIN,
+                'grader' => 0,
+                'timecreated' => time(),
+                'timemodified' => time(),
+            ]);
+        }
+
+        $approved = new approved_contextlist($student, 'mod_icontent', [$context->id]);
+        provider::delete_data_for_user($approved);
+
+        $this->assertSame(0, $DB->count_records('icontent_page_rubric_grades', ['userid' => $student->id]));
+        $this->assertSame(1, $DB->count_records('icontent_page_rubric_grades', ['userid' => $other->id]));
+    }
+
+    /**
+     * Native drafts are discoverable, exportable and erased with their question-engine data.
+     */
+    public function test_native_question_draft_privacy(): void {
+        global $CFG, $DB;
+        require_once($CFG->dirroot . '/mod/icontent/locallib.php');
+        [$module, $context, $pageid, $mappingid] = $this->create_icontent_page_and_questionmap();
+        $this->setAdminUser();
+        $generator = $this->getDataGenerator()->get_plugin_generator('core_question');
+        $category = $generator->create_question_category();
+        $question = $generator->create_question('shortanswer', null, ['category' => $category->id]);
+        $DB->update_record('icontent_pages_questions', (object)[
+            'id' => $mappingid, 'questionid' => $question->id, 'maxmark' => 1,
+        ]);
+        $student = $this->getDataGenerator()->create_user();
+        $other = $this->getDataGenerator()->create_user();
+        $cm = get_coursemodule_from_id('icontent', $module->cmid, 0, false, MUST_EXIST);
+        foreach ([$student, $other] as $user) {
+            $this->getDataGenerator()->enrol_user($user->id, $cm->course, 'student');
+            $this->setUser($user);
+            \mod_icontent\output\mobile::mobile_view(['cmid' => $cm->id, 'pageid' => $pageid]);
+        }
+        $this->setUser($student);
+        $usage = $DB->get_record('icontent_mobile_usages', ['pageid' => $pageid, 'userid' => $student->id], '*', MUST_EXIST);
+        $quba = \question_engine::load_questions_usage_by_activity($usage->qubaid);
+        $qa = $quba->get_question_attempt(1);
+        \mod_icontent\output\mobile::mobile_view(['cmid' => $cm->id, 'pageid' => $pageid, 'action' => 'save',
+            'payload' => json_encode(['usageid' => $usage->qubaid, 'answers' => [
+                $qa->get_qt_field_name('answer') => 'Private draft answer',
+                $qa->get_control_field_name('sequencecheck') => $qa->get_sequence_check_count(),
+            ]], JSON_THROW_ON_ERROR)]);
+        $DB->delete_records('icontent_pages_displayed', ['cmid' => $cm->id]);
+        $saved = \question_engine::load_questions_usage_by_activity($usage->qubaid)->get_question_attempt(1);
+        $this->assertSame('Private draft answer', $saved->get_last_qt_var('answer'));
+        $this->assertContains((int)$context->id,
+            array_map('intval', provider::get_contexts_for_userid($student->id)->get_contextids()));
+        $this->export_context_data_for_user((int)$student->id, $context, 'mod_icontent');
+        $exported = \core_privacy\local\request\writer::with_context($context)->get_data([
+            'Mobile questions', $pageid, get_string('questions', 'core_question'), 1,
+        ]);
+        $steps = \core_privacy\local\request\writer::with_context($context)->get_related_data([
+            'Mobile questions', $pageid, get_string('questions', 'core_question'), 1,
+        ], 'steps');
+        $this->assertStringContainsString('Private draft answer', json_encode($steps, JSON_THROW_ON_ERROR));
+        $this->assertObjectNotHasProperty('generalfeedback', $exported);
+        provider::delete_data_for_user(new approved_contextlist($student, 'mod_icontent', [$context->id]));
+        $this->assertFalse($DB->record_exists('question_usages', ['id' => $usage->qubaid]));
+        $this->assertFalse($DB->record_exists('icontent_mobile_usages', ['userid' => $student->id]));
+        $this->assertSame(1, $DB->count_records('icontent_mobile_usages', ['userid' => $other->id]));
+        provider::delete_data_for_all_users_in_context($context);
+        $this->assertSame(0, $DB->count_records('icontent_mobile_usages', ['cmid' => $cm->id]));
+    }
+
+    /**
      * Create one iContent activity with one page and one page-question mapping.
      *
      * @return array

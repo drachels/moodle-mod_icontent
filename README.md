@@ -46,7 +46,18 @@ Recommended action:
 ## Question engine parity planning
 See [QUESTION_ENGINE_PARITY_PLAN.md](QUESTION_ENGINE_PARITY_PLAN.md) for the concrete qtype-by-qtype parity checklist and migration sequence.
 
-## Mobile support (4.0.0, first phase)
+## Question points
+
+For question-engine questions, a page maximum copied from the question-bank
+default follows the default of the latest ready/draft question version. A
+distinct activity-specific maximum remains an override.
+
+Each submitted answer stores its maximum points. Reports, manual grading and
+question-navigation thresholds use that recorded maximum, so later bank edits
+do not rescale historical answers. The upgrade records the existing maximum for
+older answers without changing their awarded points.
+
+## Mobile support (4.0.0)
 
 Phone browsers use the normal activity, with single-column content, constrained
 images/media and wrapping touch-sized page-navigation and toolbar controls.
@@ -54,21 +65,89 @@ Wide authored tables remain horizontally scrollable within the content area.
 Questions, notes, editing and submission actions continue to use the browser;
 complex third-party question types or embeds may have their own device limits.
 
-The official Moodle app has an **online reader** for visible reference pages
-and authorized individual/group page sets. Existing own page sets are linked
-from the reader; public submissions can also be viewed when explicitly selected.
-Browsing other submissions and all interactive actions use **Open activity in
-browser**. App rendering cleans executable markup and does not reproduce page
-backgrounds, multi-column layouts or the browser question/notes interface.
-Reading logs page/activity views and view completion, but does not mark pages
-as read or create draft submissions.
+The official Moodle app supports **online native questions and page notes**,
+alongside visible reference pages and authorized individual/group page sets.
+Existing own page sets are linked from the reader; authorized public submissions
+can also be viewed when explicitly selected. App rendering cleans executable
+markup and does not reproduce page backgrounds or multi-column layouts.
 
-This is not offline support or a native app editor/question player. Site
-administrators must enable Moodle mobile web services and permit site plugins
+**Answer the question(s)** uses the app's question components and Moodle's
+Question Engine, not browser handoffs. Enabled built-in types include multiple
+choice, true/false, short answer, numerical, matching, cloze, calculated variants,
+drag-and-drop and text essays. Description questions are also displayed.
+Question drafts persist on the server, can be saved explicitly, and autosave
+every 30 seconds while the page is open. App page/page-set navigation and notes
+actions save current question drafts first. Submission records the normal
+iContent grades and historical maxima; essays await teacher grading. Existing
+navigation gates and retry permissions remain enforced.
+
+**Your notes and questions** supports both tabs, adding/editing text notes,
+replies, likes/unlikes and confirmed deletion. Existing visibility, ownership,
+private/featured/tutor-only permissions apply. Both sections respect the page's
+initial expansion settings and can be expanded or collapsed inside the app.
+The selected Notes/Questions tab controls both the displayed entries and where
+new entries are saved. Successful saves refresh the list and tools in place,
+clear the input and return to new-entry mode on the same tab. Failed saves keep
+the input for retry. Use an entry's Edit tool to change a saved entry; save or
+cancel an edit/reply before switching tabs.
+Reading logs page/activity views, marks the page displayed and records view
+completion without creating empty page-set submissions. Autosave does not create
+extra view events. Native question drafts are included in privacy export/deletion
+and removed when their activity is reset or deleted.
+
+Unsupported third-party types, essay attachments or file-picker responses require
+the explicit browser fallback for the whole question page; native submission never
+records a partial grade for those pages. Page editing, presentation imports,
+submitting page sets and teacher grading also remain browser operations.
+Offline reading/interaction is not implemented. Automated server/controller tests
+do not replace device testing: rendering, embedded media, calculated-simple and
+image/marker drag-and-drop interactions still need actual Moodle-app verification.
+
+Site administrators must enable Moodle mobile web services and permit site plugins
 under the site's Moodle App settings; app-plan/custom-app restrictions may also
-affect availability. After upgrading, refresh the activity in the app or log
-out and back in if the new handler is not discovered. No additional iContent
-server worker is needed for the reader (presentation imports still require one).
+affect availability. After upgrading, refresh the activity in the app or log out
+and back in if the new handler is not discovered. No additional iContent server
+worker is needed for app interactions (presentation imports still require one).
+Build 2026110703 fixes controller initialization and draft saving with the app's
+already-decoded response data, restoring page navigation and notes/question saves.
+Build 2026110704 fixes the shared Notes/Questions tab selection and clears the
+form after successful saves without reloading the activity. Earlier versions
+could save Questions entries under Notes when the separate selectors disagreed;
+existing entries are not automatically moved between tabs.
+Complete the Moodle plugin upgrade and refresh the activity in the app to load
+the corrected controller.
+
+## Assignment rubrics
+
+When a Content Pages activity is a page-set assignment and has a grade, its settings
+can use Moodle's built-in rubric (`gradingform_rubric`) only. Other grading-form plugins
+are not offered. Define the rubric from Advanced grading in the activity menu. Teachers
+use that rubric when grading a submitted page set. Students can see the criteria, and
+the completed rubric after grading. Direct numeric grading remains available until the
+rubric is ready. Question grades are unchanged.
+
+Pages and Results / Grades show the page-rubric points, the combined page-score
+subtotal and the current activity grade. Page-rubric points are scaled to the
+page's configured maximum, not the rubric's raw criterion-point total.
+Editing **Rubric page maximum mark** rescales saved page reviews to that maximum
+while preserving their percentage, including pending reviews' possible points.
+Authorized teachers viewing a student's page can see its completed page rubric.
+Hidden gradebook grades and private page-set scores remain hidden from other learners.
+
+For assignment activities, page-score subtotals include the learner's reference-page
+scores and their own page set, never another learner's public page set. Group-owned
+pages pool eligible group members' rubric and question scores; members without their
+own answers also receive the shared group-page result. Reference-page scores remain
+individual. Each learner's latest answer per question contributes its stored maximum;
+unanswered questions and ungraded rubric reviews retain their possible points.
+The subtotal is scaled to the activity's grade range. Pending-only work does not
+create an awarded activity grade.
+
+A saved whole-page-set grade remains the final override, including distinct member
+grades set by the teacher. Later page grading does not replace it. Page subtotals stay
+visible separately; Results / Grades use the actual gradebook grade, including
+overrides. Locked or overridden gradebook entries are preserved. Moodle's grade-update
+hook can refresh existing assignment page totals without changing saved page-set grades.
 
 ## License / Licença
 * The iContent uses the GPL-3.0+ license, to learn more read the link: [GPL license](http://www.gnu.org/copyleft/gpl.html).

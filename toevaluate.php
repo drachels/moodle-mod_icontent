@@ -49,6 +49,130 @@ $PAGE->set_heading($course->fullname);
 $PAGE->navbar->add(get_string('results', 'mod_icontent'))->add(get_string('manualreview', 'mod_icontent'))->add(fullname($user));
 // Get total questions by instance.
 $tquestinstance = icontent_get_totalquestions_by_instance($cm->id);
+$pagerubricreviews = \mod_icontent\local\assignment::get_page_rubric_reviews($cm->id, (int)$user->id, $status);
+$pagerubricsavedcount = 0;
+/**
+ * Build the single rubric form for the participant's page reviews.
+ *
+ * @param int[] $excludedids Review ids that must not be shown, because they were just saved.
+ * @return array The form, or null when no rubric can be shown, and its review data keyed by review id.
+ */
+$buildpagerubricform = function (
+    array $excludedids = []
+) use ($pagerubricreviews, $context, $icontent, $cm, $user, $status): array {
+    global $USER;
+
+    $formreviews = [];
+    foreach ($pagerubricreviews as $review) {
+        $reviewid = (int)$review->id;
+        if (in_array($reviewid, $excludedids, true)) {
+            continue;
+        }
+        // Reuse the grading instance that was displayed when the form was submitted.
+        $instance = \mod_icontent\local\assignment::prepare_grading_instance(
+            $context,
+            $icontent,
+            (object)['id' => \mod_icontent\local\assignment::page_rubric_itemid($reviewid)],
+            (int)$USER->id,
+            optional_param(\mod_icontent\form\page_rubric_grade::instanceid_element_name($reviewid), 0, PARAM_INT)
+        );
+        if (!$instance) {
+            continue;
+        }
+        $pagecontent = file_rewrite_pluginfile_urls(
+            $review->pageicontent,
+            'pluginfile.php',
+            $context->id,
+            'mod_icontent',
+            'page',
+            $review->pageid
+        );
+        $pagecontent = icontent_replace_dynamic_page_placeholders($pagecontent, $context);
+        $formreviews[$reviewid] = [
+            'heading' => get_string('strattempttitle', 'mod_icontent', $review),
+            'content' => format_text($pagecontent, $review->pageicontentformat, ['context' => $context]),
+            'feedback' => $review->feedback ?? '',
+            'gradinginstance' => $instance,
+        ];
+    }
+    if (!$formreviews) {
+        return [null, []];
+    }
+    $form = new \mod_icontent\form\page_rubric_grade(null, [
+        'cmid' => $cm->id,
+        'userid' => $user->id,
+        'status' => $status,
+        'reviews' => $formreviews,
+    ], 'post', '', ['data-random-ids' => '1']);
+    return [$form, $formreviews];
+};
+/**
+ * Save the given completed page rubrics.
+ *
+ * @param int[] $reviewids Review ids to save.
+ * @param array|stdClass $data Submitted form data.
+ * @param array $formreviews Review data of the submitted form, keyed by review id.
+ */
+$savepagerubrics = function (
+    array $reviewids,
+    $data,
+    array $formreviews
+) use ($pagerubricreviews, $context, $icontent, $cm, $user): void {
+    global $DB, $USER;
+
+    $data = (array)$data;
+    $transaction = $DB->start_delegated_transaction();
+    foreach ($reviewids as $reviewid) {
+        \mod_icontent\local\assignment::save_page_rubric_grade(
+            $context,
+            $icontent,
+            $pagerubricreviews[$reviewid],
+            (array)$data[\mod_icontent\form\page_rubric_grade::grading_element_name($reviewid)],
+            (int)$USER->id,
+            (string)($data[\mod_icontent\form\page_rubric_grade::feedback_element_name($reviewid)] ?? ''),
+            (int)$formreviews[$reviewid]['gradinginstance']->get_id()
+        );
+    }
+    $transaction->allow_commit();
+    icontent_set_grade_item($icontent, $cm->id, $user->id);
+};
+[$pagerubricform, $pagerubricformreviews] = $buildpagerubricform();
+if ($pagerubricform) {
+    if ($pagerubricform->is_cancelled()) {
+        redirect(new moodle_url('/mod/icontent/grading.php', [
+            'id' => $cm->id,
+            'action' => 'grading',
+            'status' => $status,
+        ]));
+    }
+    if ($data = $pagerubricform->get_data()) {
+        $startedreviewids = $pagerubricform->get_started_reviewids($data);
+        $savepagerubrics($startedreviewids, $data, $pagerubricformreviews);
+        redirect(
+            new moodle_url('/mod/icontent/toevaluate.php', [
+                'id' => $cm->id,
+                'status' => $status,
+                'userid' => $userid,
+                'notif' => 'saved',
+                'savedcount' => count($startedreviewids),
+                'sesskey' => sesskey(),
+            ]),
+            get_string('msgsucessevaluate', 'mod_icontent', count($startedreviewids))
+        );
+    } else if ($pagerubricform->is_submitted()) {
+        // Some started rubric is incomplete: save the complete ones and show only the rest, with their entries and errors.
+        $submitted = $pagerubricform->get_submitted_data();
+        $completereviewids = $submitted ? $pagerubricform->get_complete_reviewids($submitted) : [];
+        if ($completereviewids) {
+            $savepagerubrics($completereviewids, $submitted, $pagerubricformreviews);
+            $pagerubricsavedcount = count($completereviewids);
+            [$pagerubricform, $pagerubricformreviews] = $buildpagerubricform($completereviewids);
+            if ($pagerubricform) {
+                $pagerubricform->is_validated();
+            }
+        }
+    }
+}
 // Check action.
 if ($action) {
     // Receives values.
@@ -67,7 +191,7 @@ if ($action) {
         if (!empty($attemptids)) {
             [$insql, $inparams] = $DB->get_in_or_equal($attemptids, SQL_PARAMS_NAMED);
             $sql = "SELECT qa.id,
-                           pq.maxmark,
+                           COALESCE(NULLIF(qa.maxmark, 0), NULLIF(pq.maxmark, 0), q.defaultmark, 1) AS maxmark,
                            q.defaultmark
                       FROM {icontent_question_attempts} qa
                 INNER JOIN {icontent_pages_questions} pq
@@ -132,7 +256,12 @@ if ($action) {
             ICONTENT_QTYPE_ESSAY_STATUS_TOEVALUATE
         );
 
-        if (empty($remainingtoevaluate)) {
+        $remainingrubric = \mod_icontent\local\assignment::get_page_rubric_reviews(
+            $cm->id,
+            (int)$user->id,
+            ICONTENT_QTYPE_ESSAY_STATUS_TOEVALUATE
+        );
+        if (empty($remainingtoevaluate) && empty($remainingrubric)) {
             redirect(
                 new moodle_url(
                     '/mod/icontent/grading.php',
@@ -177,7 +306,7 @@ if ($action) {
 }
 
 $qopenanswers = icontent_get_questions_and_open_answers_by_user($user->id, $cm->id, $status);
-if (!$qopenanswers) {
+if (!$qopenanswers && !$pagerubricreviews) {
     redirect(
         new moodle_url(
             '/mod/icontent/grading.php',
@@ -201,39 +330,40 @@ if ($notif === 'saved' && $savedcountparam > 0) {
 }
 $preferredformat = editors_get_preferred_format($context);
 $preferrededitor = editors_get_preferred_editor($preferredformat);
-echo html_writer::start_tag('form', ['method' => 'post']);
-foreach ($qopenanswers as $qopenanswer) {
-    $fieldname = 'question[attemptid-' . $qopenanswer->id . ']';
-    $fieldid =
+if ($qopenanswers) {
+    echo html_writer::start_tag('form', ['method' => 'post']);
+    foreach ($qopenanswers as $qopenanswer) {
+        $fieldname = 'question[attemptid-' . $qopenanswer->id . ']';
+        $fieldid =
         'idquestion-' . $qopenanswer->questionid . '_pqid-' .
         $qopenanswer->pagesquestionsid . '_' . ICONTENT_QTYPE_ESSAY;
-    $commentfieldname = 'questioncomment[attemptid-' . $qopenanswer->id . ']';
-    $commentformatname = 'questioncommentformat[attemptid-' . $qopenanswer->id . ']';
-    $commentfieldid = 'idcomment-' . $qopenanswer->id;
-    $questionblockid = 'idq' . $qopenanswer->questionid;
-    $fraction = (
+        $commentfieldname = 'questioncomment[attemptid-' . $qopenanswer->id . ']';
+        $commentformatname = 'questioncommentformat[attemptid-' . $qopenanswer->id . ']';
+        $commentfieldid = 'idcomment-' . $qopenanswer->id;
+        $questionblockid = 'idq' . $qopenanswer->questionid;
+        $fraction = (
         $status === ICONTENT_QTYPE_ESSAY_STATUS_VALUED
         || (string)$qopenanswer->qtype === ICONTENT_QTYPE_ESSAYAUTOGRADE
-    ) ? $qopenanswer->fraction : ''; // Check status.
-    $reviewercomment = (string)($qopenanswer->reviewercomment ?? '');
-    $reviewercommentformat = (int)($qopenanswer->reviewercommentformat ?? $preferredformat);
-    $maxgrade = (float)($qopenanswer->maxmark ?? 0);
-    if ($maxgrade <= 0) {
-        $maxgrade = (float)($qopenanswer->defaultmark ?? 0);
-    }
-    if ($maxgrade <= 0) {
-        $maxgrade = 1.0;
-    }
-    // Get page.
-    $page = $DB->get_record('icontent_pages', ['id' => $qopenanswer->pageid], 'id, title, pagenum', MUST_EXIST);
-    $qanswercontent = icontent_render_manual_review_answer($qopenanswer, (int)$cm->id);
-    if ($preferrededitor) {
-        $preferrededitor->use_editor($commentfieldid, [
+        ) ? $qopenanswer->fraction : ''; // Check status.
+        $reviewercomment = (string)($qopenanswer->reviewercomment ?? '');
+        $reviewercommentformat = (int)($qopenanswer->reviewercommentformat ?? $preferredformat);
+        $maxgrade = (float)($qopenanswer->maxmark ?? 0);
+        if ($maxgrade <= 0) {
+            $maxgrade = (float)($qopenanswer->defaultmark ?? 0);
+        }
+        if ($maxgrade <= 0) {
+            $maxgrade = 1.0;
+        }
+        // Get page.
+        $page = $DB->get_record('icontent_pages', ['id' => $qopenanswer->pageid], 'id, title, pagenum', MUST_EXIST);
+        $qanswercontent = icontent_render_manual_review_answer($qopenanswer, (int)$cm->id);
+        if ($preferrededitor) {
+            $preferrededitor->use_editor($commentfieldid, [
             'context' => $context,
             'autosave' => false,
-        ]);
-    }
-    $templatecontext = [
+            ]);
+        }
+        $templatecontext = [
         'questionblockid' => $questionblockid,
         'questionblockclass' => 'que manualgraded ' . ICONTENT_QTYPE_ESSAY,
         'attempttitle' => get_string('strattempttitle', 'mod_icontent', $page),
@@ -252,10 +382,28 @@ foreach ($qopenanswers as $qopenanswer) {
         'maxgrade' => $maxgrade,
         'maxgradeformatted' => number_format($maxgrade, 2),
         'strmaxgrade' => get_string('strmaxgrade', 'mod_icontent'),
-    ];
-    echo $OUTPUT->render_from_template('mod_icontent/manual_review_question_card', $templatecontext);
+        ];
+        echo $OUTPUT->render_from_template('mod_icontent/manual_review_question_card', $templatecontext);
+    }
+    echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'action', 'value' => true]);
+    echo html_writer::empty_tag('input', ['type' => 'submit', 'value' => get_string('savechanges')]);
+    echo html_writer::end_tag('form');
 }
-echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'action', 'value' => true]);
-echo html_writer::empty_tag('input', ['type' => 'submit', 'value' => get_string('savechanges')]);
-echo html_writer::end_tag('form');
+if ($pagerubricreviews) {
+    echo $OUTPUT->heading(get_string('rubricpages', 'icontent'), 4);
+    $rubricready = \mod_icontent\local\assignment::get_grading_controller($context);
+    if (!$rubricready || !$rubricready->is_form_available()) {
+        echo $OUTPUT->notification(get_string('rubricnotready', 'icontent'), 'warning');
+        echo $OUTPUT->single_button(
+            \mod_icontent\local\assignment::get_rubric_editor_url($context, $PAGE->url),
+            get_string('definerubric', 'icontent')
+        );
+    }
+    if ($pagerubricsavedcount) {
+        echo $OUTPUT->notification(get_string('msgsucessevaluatepartial', 'mod_icontent', $pagerubricsavedcount), 'success');
+    }
+    if ($pagerubricform) {
+        $pagerubricform->display();
+    }
+}
 echo $OUTPUT->footer();

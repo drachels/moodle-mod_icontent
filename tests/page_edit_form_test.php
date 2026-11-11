@@ -8,22 +8,21 @@
 //
 // Moodle is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with Moodle. If not, see <http://www.gnu.org/licenses/>.
+// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
 namespace mod_icontent;
 
 use mod_icontent\form\page_edit;
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
  * Tests for the autoloaded page-edit form and its legacy compatibility wrapper.
  *
  * @package mod_icontent
+ * @copyright 2026 AL Rachels
  * @license http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  * @covers \mod_icontent\form\page_edit
  */
@@ -77,6 +76,20 @@ final class page_edit_form_test extends \advanced_testcase {
         $this->assertSame('#ABCDEF', $customdata['page']->bgcolor);
         $this->assertSame('#123456', $customdata['page']->bordercolor);
         $this->assertSame('#000000', $customdata['page']->titlecolor);
+    }
+
+    /**
+     * A rubric maximum cannot be zero, negative or non-numeric.
+     */
+    public function test_rubric_maximum_validation(): void {
+        [, $customdata] = $this->create_form_data();
+        $form = new page_edit(null, $customdata);
+        foreach ([0, -10, 'invalid'] as $maximum) {
+            $errors = $form->validation(['userubric' => 1, 'rubricmaxmark' => $maximum], []);
+            $this->assertArrayHasKey('rubricmaxmark', $errors);
+        }
+        $errors = $form->validation(['userubric' => 1, 'rubricmaxmark' => 100], []);
+        $this->assertArrayNotHasKey('rubricmaxmark', $errors);
     }
 
     /**

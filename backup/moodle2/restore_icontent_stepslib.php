@@ -348,6 +348,12 @@ class restore_icontent_activity_structure_step extends restore_questions_activit
         $data->icontentid = $this->get_new_parentid('icontent');
         $data->timecreated = $this->apply_date_offset($data->timecreated);
         $data->timemodified = $this->apply_date_offset($data->timemodified);
+        if (!isset($data->userubric)) {
+            $data->userubric = 0;
+        }
+        if (!isset($data->rubricmaxmark)) {
+            $data->rubricmaxmark = 1;
+        }
 
         $newitemid = $DB->insert_record('icontent_pages', $data);
         $this->set_mapping('icontent_page', $oldid, $newitemid);
@@ -437,6 +443,8 @@ class restore_icontent_activity_structure_step extends restore_questions_activit
         $data->incorrectnextpageid = (int)($data->incorrectnextpageid ?? 0);
         $data->manualreviewnextpageid = (int)($data->manualreviewnextpageid ?? 0);
         $data->defaultnextpageid = (int)($data->defaultnextpageid ?? 0);
+        $data->minimumscore = (int)($data->minimumscore ?? 0);
+        $data->minimumscorenextpageid = (int)($data->minimumscorenextpageid ?? 0);
         $data->timecreated = $this->apply_date_offset($data->timecreated);
         $data->timemodified = $this->apply_date_offset($data->timemodified);
 
@@ -653,7 +661,8 @@ class restore_icontent_activity_structure_step extends restore_questions_activit
                         pq.correctnextpageid,
                         pq.incorrectnextpageid,
                         pq.manualreviewnextpageid,
-                        pq.defaultnextpageid
+                        pq.defaultnextpageid,
+                        pq.minimumscorenextpageid
                    FROM {icontent_pages_questions} pq
                    JOIN {icontent_pages} p ON p.id = pq.pageid
                   WHERE p.icontentid = ?',
@@ -666,6 +675,7 @@ class restore_icontent_activity_structure_step extends restore_questions_activit
                 $pqupdate->incorrectnextpageid = $this->resolve_pageid((int)$pq->incorrectnextpageid);
                 $pqupdate->manualreviewnextpageid = $this->resolve_pageid((int)$pq->manualreviewnextpageid);
                 $pqupdate->defaultnextpageid = $this->resolve_pageid((int)$pq->defaultnextpageid);
+                $pqupdate->minimumscorenextpageid = $this->resolve_pageid((int)$pq->minimumscorenextpageid);
                 $DB->update_record('icontent_pages_questions', $pqupdate);
             }
         }

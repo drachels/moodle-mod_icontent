@@ -8,21 +8,24 @@
 //
 // Moodle is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with Moodle. If not, see <http://www.gnu.org/licenses/>.
+// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
  * Dedicated presentation conversion worker. Never bootstrap Moodle or run inside PHP-FPM.
  *
  * @package mod_icontent
+ * @copyright 2026 AL Rachels
  * @license http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 use Symfony\Component\Process\Process;
 
+// This isolated worker deliberately runs without Moodle's config.php.
+// phpcs:ignore moodle.Files.MoodleInternal.MoodleInternalGlobalState
 if (PHP_SAPI !== 'cli') {
     http_response_code(404);
     exit;

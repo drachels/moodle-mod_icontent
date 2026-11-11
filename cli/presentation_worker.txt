@@ -26,7 +26,11 @@ Type=simple
 User=apache
 Group=apache
 UMask=0077
-ExecStart=/usr/bin/php /path/to/moodle/public/mod/icontent/cli/presentation_worker.php --workdir=/path/to/moodledata/temp/icontent-presentations --autoload=/path/to/moodle/vendor/autoload.php --office=/usr/bin/libreoffice --sandbox=/usr/bin/bwrap
+ExecStart=/usr/bin/php /path/to/moodle/public/mod/icontent/cli/presentation_worker.php \
+    --workdir=/path/to/moodledata/temp/icontent-presentations \
+    --autoload=/path/to/moodle/vendor/autoload.php \
+    --office=/usr/bin/libreoffice \
+    --sandbox=/usr/bin/bwrap
 Restart=on-failure
 RestartSec=3
 NoNewPrivileges=yes

@@ -18,6 +18,7 @@
  * Finalise an iContent assignment submission.
  *
  * @package    mod_icontent
+ * @copyright  2026 AL Rachels
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 

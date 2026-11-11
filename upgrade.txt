@@ -30,20 +30,12 @@ Upgrade.txt working notes:
     render in notes/doubts text area.
 20240729 iContent_1291 - The styles.css file needs some attention re: text starts below where it
     should for the content page text area.
-20240805 iContent_1292 - Would be nice to limit proceeding to new slide/page based on question
-    completion on current slide/page.
-    2026062701 - Partial foundation in place: activity-level side TOC hide setting exists; remaining
-        objective is no-Prev/Next progression with per-page question/link-controlled next-page routing.
-    2026062801 Note, that the other part needed, hiding the Previous and Next buttons, can be done on
-        each individual page setting.
+
 20240805 iContent_1293 - Would be nice if Previous/Next buttons were like those in a Book resource.
-20240824 iContent_1297 - Need to implement icontent_print_recent_activity function in lib.php.
 20240825 iContent_1302 - Need to update the two functions regarding scale_used
     and Scale_used_anywhere.
 20240827 iContent_1309 - Need to implement viewaftertimeclose capability.
 20260313 iContent_1440 - Need to implement running code prechecks before a release.
-20260602 iContent_1498 - Feature Request - It would be nice if Content Pages had mobile support.
-    20261031 First-phase support implemented in 4.0.0; native app interaction and offline use remain pending.
 20260623 iContent_1508 - Feature Request - It would be nice to include Content Page documentation
     as an included activity.
 20260623 iContent_1509 - Feature Request - It would be nice if the question_matrix was an editable page.
@@ -51,15 +43,48 @@ Upgrade.txt working notes:
     20261031 Phase one implemented in 4.0.0; remaining legacy files are still pending.
 20260715 iContent_1517 - Feature Request - See if question results can make other activities mandatory.
 20260715 iContent_1518 - Feature Request - Can SEB be used with Content pages that have questions? 
-20260809 iContent_1528 - Feature Request - Investigate adding audio capability to pages
-    and questions.
-
-20261031 iContent_1577 - iContent - Feature Request - Need to be able to define/use scoring rubrics.
+20260809 iContent_1528 - Feature Request - Investigate adding audio interface capability to
+    pages and questions.
+20260829 iContent_1533 - Feature Request - Need to create Group mode visibility.
 
 
 
 === 4.0.0 === pending
+20240111 iContent_1167 - iContent - Capability "mod/icontent:rate" was not found! This has to
+    be fixed in code.
+    2026103100 Added the missing capability for teachers, editing teachers and managers.
+    2024011101 Got all these debug messages when I was doing a MooTyper upgrade, and the new
+       Grade Me stuff popped up, and I stupidly checked the box asking me if I wanted to display
+       any Content Pages essays that needed grading. Went back and turned it off for now.
+20240805 iContent_1292 - Would be nice to limit proceeding to new slide/page based on question
+    completion on current slide/page.
+    2026110501 Related: iContent_1578bt adds recorded-grade and minimum-score progression
+        gates. Test these together with hidden navigation and question/link-controlled routing
+        before considering this ticket complete.
+    2026062701 - Partial foundation in place: activity-level side TOC hide setting exists; remaining
+        objective is no-Prev/Next progression with per-page question/link-controlled next-page routing.
+    2026062801 Note, that the other part needed, hiding the Previous and Next buttons, can be done on
+        each individual page setting.
+20240824 iContent_1297bt - Need to implement icontent_print_recent_activity function in lib.php.
+    2024082401 - Earlier testing: a student completed two Content Pages activities,
+        but no activity appeared in the installed Recent activity block.
+    2026110701 - Verified in current code: icontent_print_recent_activity() collects
+        and displays page views, question attempts, and notes/questions/replies.
+        Current manual testing confirms page views and question answers appear in
+        the Recent activity block. Related fix recorded under iContent_1322r in 2.0.3;
+        moved this ticket from Deferred to 4.0.0 to record the current verification.
+20260317 iContent_1446bt - Follow-up: keep question points consistent with the bank version.
+    2026110700 - Questions whose page maximum was copied from the bank default now
+        follow the latest ready/draft version's default; distinct maxima remain overrides.
+        Record each submitted answer's maximum for reports, manual grading, grade totals
+        and navigation thresholds; preserve older awarded points and maxima on upgrade.
+        Rebuild cached question usages when their displayed maximum no longer matches.
+    2026110702 - Verified the reported page displays Points out of 3.00. Six focused
+        tests pass with 66 assertions, including version changes, cached maxima,
+        historical results, overrides, upgrade preservation and navigation thresholds.
+        Related 49-test run passes 297 assertions with existing DOM-parser warnings.
 20260602 iContent_1498 - Feature Request - It would be nice if Content Pages had mobile support.
+    20261031 First-phase support implemented in 4.0.0; native app interaction and offline use remain pending.
     2026103131 - Add an online Moodle-app reader for visible reference and authorized
         individual/group pages, with browser handoff for questions, notes, editing and submissions.
     2026103132 - Preserve page order, embedded file URLs, page/activity view events and view
@@ -71,6 +96,50 @@ Upgrade.txt working notes:
     2026103135 - Verify mobile API discovery, content and access/completion behavior with
         12 tests and 36 assertions; check 320/390px browser layouts and 44px touch targets.
         Actual Moodle-app device verification remains required.
+    20261107 Native online question/notes interactions implemented below; device verification,
+        offline use, page editing and file-upload/unsupported question types remain deferred.
+    2026110703 - App reader pages now expose question and authorized notes sections as
+        visible cards with authenticated browser links to the selected page and section.
+        Cards are visible regardless of expansion settings; native app question answering
+        and notes interaction remain deferred, not implemented by these browser handoffs.
+    2026110704 - Verified mobile API output and permissions with 14 tests and 58 assertions,
+        including expanded/collapsed settings and submission-specific section links.
+        Live app output includes both controls on the reported question page; physical
+        Moodle-app browser handoff verification remains required.
+    2026110705 - Replace question/notes browser handoffs with native online app controls:
+        persistent Question Engine usages, response preparation, draft saving/autosave,
+        grading/review and scoped retry; native notes/questions, replies, edits, likes,
+        privacy flags and confirmed deletion. Preserve visibility and navigation gates.
+        Register native draft privacy export/deletion and activity/page cleanup.
+        File-upload essays and unsupported types retain explicit whole-page browser fallback.
+    2026110706 - Add server and app-controller regression coverage for grading, stale/replayed
+        responses, drafts, permissions, retries, version/maxmark changes, privacy and cleanup.
+        Verify native embedded-file ownership, visibility and deferred-feedback permissions.
+        Related PHP suites pass 76 tests / 462 assertions; six app-controller tests also pass.
+        Existing DOM-parser warnings and PHPUnit metadata deprecations remain unchanged.
+        Physical Moodle-app rendering, embedded media and device interactions still need
+        verification before considering native support fully tested.
+    2026110707 - Fix native controller initialization and draft responses to accept the
+        Moodle app's already-decoded otherdata, while retaining raw JSON support.
+        Double decoding prevented navigation and notes/question saves. Controller regression
+        tests now use decoded app data, including draft sequence updates and pages without
+        editable questions: 9 controller tests and 25 mobile API tests (152 assertions)
+        pass. Build 2026110703 requires a plugin upgrade and app refresh; physical Android
+        device verification remains required.
+    2026110708 - Consolidate this ticket under 4.0.0. Earlier browser-only and deferred
+        question/notes entries describe previous phases; online native interactions are now
+        implemented. Android verification of navigation and question/notes saving remains
+        outstanding. Offline reading/interaction and native page editing, presentation
+        imports, page-set submission, teacher grading and file-upload/unsupported question
+        types remain deferred; browser fallbacks are available for the latter operations.
+    2026110709 - Fix Your notes and questions: use one Notes/Questions tab selection for
+        the list and new entries, replacing the independent save-type selector. Refresh
+        entries and permitted tools from mutation responses without reloading the activity.
+        Successful add/edit/reply saves clear the form and retain the selected tab; failed
+        saves retain input for retry. Likes/deletion retain unrelated unsaved input.
+        Existing entries are not moved between tabs. Verified with 23 controller tests
+        and 26 mobile API tests (180 assertions). Build 2026110704 requires a plugin
+        upgrade and app refresh; physical Android verification remains outstanding.
 20260623 iContent_1510 - Feature Request - Need to see about changing files to classes.
     2026103127 - Move the page-edit form to autoloaded mod_icontent\form\page_edit and
         update edit.php; retain edit_form.php as a compatibility wrapper for legacy callers.
@@ -80,13 +149,7 @@ Upgrade.txt working notes:
         renderer.php as a compatibility wrapper for legacy callers and theme subclasses.
     2026103130 - Preserve renderer methods and AMD initialization; verify Moodle renderer
         discovery, legacy compatibility and JavaScript requirements with 3 tests and 10 assertions.
-20240111 iContent_1167 - iContent - Capability "mod/icontent:rate" was not found! This has to
-    be fixed in code.
-    2026103100 Added the missing capability for teachers, editing teachers and managers.
-    2024011101 Got all these debug messages when I was doing a MooTyper upgrade, and the new
-       Grade Me stuff popped up, and I stupidly checked the box asking me if I wanted to display
-       any Content Pages essays that needed grading. Went back and turned it off for now.
-20260901 iContent_1539 - Feature Request - Import Presentations with each slide
+20260901 iContent_1539bt - Feature Request - Import Presentations with each slide
     being a new page.
     2026090401 Might refer to this plugin https://marketplace.moodle.com/plugins/4084 that imports
         Power Point presentations to the Book resource.
@@ -108,12 +171,12 @@ Upgrade.txt working notes:
         and administrator enablement; document persistent service setup in cli/presentation_worker.txt.
     2026103126 - Verify conversion through SELinux-confined PHP-FPM and test worker failure cleanup
         and source-symlink rejection; full suite has 41 tests and 250 assertions (existing warnings remain).
-20261018  iContent_1572b - Feature Request - Need to be able to show/hide branches in a TOC.
+20261018 iContent_1572bt - Feature Request - Need to be able to show/hide branches in a TOC.
     2026101801 Branch labels now expand/collapse their page lists using keyboard-accessible native
         disclosure controls. Initially only the current page's branch is open; AJAX page
         navigation opens the destination branch. Add Expand all / Collapse all controls.
         This only folds navigation; page visibility, ordering and teacher actions are unchanged.
-20261031  iContent_1575b - iContent - Feature Request - Add the capability to make Content Page
+20261031 iContent_1575bt - iContent - Feature Request - Add the capability to make Content Page
     Branches into an assignment.
     2026103100 Added standalone individual/group page-set assignments with due dates, final
         submission, teacher grading, and optional visibility to course participants.
@@ -137,7 +200,7 @@ Upgrade.txt working notes:
      status without overriding availability.
     2026103114 - Validate assignment changes with 32 PHPUnit tests and 177 assertions; existing
         parser warnings/deprecations remain.
-20261031 iContent_1576 - iContent - Feature Request - Need an optional non-contribution
+20261031 iContent_1576bt - iContent - Feature Request - Need an optional non-contribution
     penalty for group members.
     2026103101 Added optional group participation review using Moodle page creation/edit logs,
         teacher-adjustable selections and individual gradebook grades. Missing evidence does
@@ -157,11 +220,73 @@ Upgrade.txt working notes:
         selected grades, and locked/overridden gradebook entries.
     2026103117 - Show students their own grade separately from the group grade and respect
         gradebook hiding for individual grades.
+20261104 iContent_1577bt - Define and use Moodle's built-in scoring rubric for assignment
+    submissions and individual pages.
+    2026110401 - Assignment page sets use Moodle's built-in rubric only. The grading
+        method appears when assignment mode and a grade are enabled, and other grading-form
+        plugins are not offered. Teachers define the rubric from Advanced grading and use it
+        on the submission grade page. Students see the criteria and the completed rubric.
+        Direct grading remains available until the rubric is ready. Question grades are unchanged.
+    2026110402 - The submissions list includes every name field required by fullname().
+    2026110403 - A page can be assigned the activity's built-in rubric. Opening that page
+        queues the student in Results, Grades, and Manual review. Teachers grade it with
+        the same rubric; the scaled score is included in the activity total. Other
+        grading-form plugins are not used.
+    2026111102 - Show scaled page-rubric points, page-score subtotals and the actual
+        activity grade on pages and in Results / Grades. Teachers viewing an owned
+        page see its completed rubric; respect grade hiding and page-set privacy.
+        Assignment subtotals include reference scores and the owner's pages only.
+        Group-page rubric/question contributions are pooled for eligible members,
+        including members with no personal answers. Use each learner's latest answer
+        and recorded maximum; keep ungraded possible points in provisional totals.
+        Whole-page-set grades remain final overrides, including individual member
+        grades. Preserve locked/overridden gradebook entries when refreshing totals.
+        Full PHP suite passes 99 tests / 663 assertions with existing TOC parser
+        warnings and PHPUnit metadata deprecations. Live page-set 13 has 9/10 page
+        points, scaled to 90/100; refreshed stored totals for activity 9932.
+    2026111103 - Keep pending-only work ungraded; full PHP suite passes 99 tests /
+        672 assertions with the existing warnings/deprecations. Fix page-maximum
+        edits to rescale saved rubric reviews without changing their percentage
+        or turning pending reviews into awarded grades. Validate positive maxima.
+        Four focused ownership/rescaling/form tests pass with 54 assertions.
+        Repair the already-edited page 1484 review from 9/10 to 90/100; its
+        activity grade remains 90/100.
+20261101 iContent_1578bt - Require recorded page grades and optional minimum net question
+    scores before learners proceed to configured destinations.
+    Related: iContent_1292 covers question-completion progression and navigation visibility.
+    2026110500 Require each learner's question and rubric grades on a page before forward
+        navigation; backward navigation and pages without gradeable items remain available.
+        Load navigation helpers before AJAX grade checks to prevent page-loading errors for all roles.
+    2026110501 Add an optional minimum net percentage and destination per question.
+        For example, 70% requires a net score of 7 out of 10 after distractor penalties.
+        The latest graded answer must meet every configured minimum on the page;
+        minimum-score routes take priority over other question outcomes.
+        Zero disables the minimum. Teachers must allow enough attempts for retries.
+        Staff retain their navigation bypass. Backup/restore includes minimum-score settings.
+        Legacy multiple-answer grading now includes configured distractor penalties,
+        matching the net-score requirement rather than counting only correct selections.
+        Show minimum-score guidance in a help pop-up. Collapse unused Routing targets
+        controls per question; configured routes open automatically and remain collapsible.
+20261105 iContent_1579 - Feature Request - The addquestionpage.php needs navigation buttons
+    at top of the page.
+    2026110501 Show matching Save question selection, Cancel and question-bank paging
+        controls above and below the question list.
+        Collapse each question's Created by name and timestamp until selected.
+20261111 iContent_1581bt - Feature Request - Need to be able to insert Links/buttons on Cover
+    Page and have them render.
+    2026111101 - Cover pages now use the normal page formatting, embedded-file URL rewriting
+        and context-aware Moodle text filters, retaining links and Generico/PoodLL output.
+        Long covers use a 500-character plain-text preview; Show more/Show less displays
+        the intact formatted content without splitting or duplicating filter widgets.
+        Keep media-only covers visible. Three focused tests pass with 21 assertions;
+        related tests pass their assertions with existing TOC DOM-parser warnings.
+        Live Generico/PoodLL rendering and interaction still require browser verification.
+
 
 
 === 3.0.1 === (Build: 2026100300)
-20260808 iContent_1527r - Feature Request - When using Manual review of multiple answers, cannot
-    do a partial, Save changes.
+20260808 iContent_1527r - Feature Request - When using Manual review of multiple answers,
+    cannot do a partial, Save changes.
     2026080801 Updated toevaluate.php save flow to support in-progress saves:
         only answered/commented rows are updated, unanswered rows stay pending,
         and teachers receive explicit saved/no-changes feedback while remaining

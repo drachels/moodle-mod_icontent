@@ -18,6 +18,7 @@
  * Grade an iContent assignment submission.
  *
  * @package    mod_icontent
+ * @copyright  2026 AL Rachels
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
@@ -90,8 +91,16 @@ $gradeitem = grade_item::fetch([
     'itemnumber' => 0,
 ]);
 $existinggrades = $gradeitem ? grade_grade::fetch_all(['itemid' => $gradeitem->id]) : [];
+$gradingcontroller = \mod_icontent\local\assignment::get_grading_controller($context);
+$gradinginstance = \mod_icontent\local\assignment::prepare_grading_instance(
+    $context,
+    $icontent,
+    $submission,
+    (int)$USER->id,
+    optional_param('advancedgradinginstanceid', 0, PARAM_INT)
+);
 
-if (data_submitted()) {
+if (!$gradinginstance && data_submitted()) {
     require_sesskey();
     $rawgrade = required_param('grade', PARAM_RAW_TRIMMED);
     $feedback = optional_param('feedback', '', PARAM_TEXT);
@@ -155,6 +164,107 @@ if (data_submitted()) {
 $PAGE->set_url('/mod/icontent/grade_submission.php', ['id' => $cm->id, 'submissionid' => $submissionid]);
 $PAGE->set_title($icontent->name);
 $PAGE->set_heading($course->fullname);
+
+if ($gradinginstance) {
+    $gradesbyuser = [];
+    foreach ($existinggrades ?: [] as $existinggrade) {
+        $gradesbyuser[$existinggrade->userid] = $existinggrade;
+    }
+    $gradeform = new \mod_icontent\form\submission_grade($PAGE->url, [
+        'id' => $cm->id,
+        'submissionid' => $submissionid,
+        'submission' => $submission,
+        'gradinginstance' => $gradinginstance,
+        'users' => $users,
+        'reviewparticipation' => $reviewparticipation,
+        'contributions' => $reviewparticipation
+            ? \mod_icontent\local\assignment::get_contributions($submission, $context) : null,
+        'existinggrades' => $gradesbyuser,
+    ]);
+    if ($gradedata = $gradeform->get_data()) {
+        $rawgrade = \mod_icontent\local\assignment::grade_from_rubric(
+            $gradinginstance,
+            (array)$gradedata->advancedgrading,
+            $submissionid,
+            $scalegrade
+        );
+        $selected = [];
+        $individualgrades = [];
+        if ($reviewparticipation) {
+            foreach ($users as $userid => $unused) {
+                $flag = 'individual_' . $userid;
+                if (!empty($gradedata->$flag)) {
+                    $selected[$userid] = 1;
+                    $field = 'individualgrade_' . $userid;
+                    $individualgrades[$userid] = $gradedata->$field ?? '';
+                }
+            }
+        }
+        $overrides = [];
+        foreach ($selected as $userid => $enabled) {
+            if ($enabled) {
+                $overrides[$userid] = $individualgrades[$userid] ?? '';
+            }
+        }
+        $grades = \mod_icontent\local\assignment::build_member_grades(
+            array_keys($users),
+            $rawgrade,
+            $overrides,
+            $maximumgrade,
+            $scalegrade,
+            (int)$USER->id
+        );
+        if ($gradeitem && $gradeitem->is_locked()) {
+            throw new moodle_exception('assignmentgradelocked', 'icontent');
+        }
+        foreach ($existinggrades ?: [] as $existinggrade) {
+            if (isset($users[$existinggrade->userid]) && ($existinggrade->is_locked() || $existinggrade->is_overridden())) {
+                throw new moodle_exception('assignmentgradelocked', 'icontent');
+            }
+        }
+        $transaction = $DB->start_delegated_transaction();
+        $graderesult = grade_update(
+            'mod/icontent',
+            (int)$course->id,
+            'mod',
+            'icontent',
+            (int)$icontent->id,
+            0,
+            $grades
+        );
+        if ($graderesult !== GRADE_UPDATE_OK) {
+            throw new moodle_exception('gradeupdatefailed', 'icontent');
+        }
+        $submission->status = \mod_icontent\local\assignment::STATUS_GRADED;
+        $submission->grade = (float)$rawgrade;
+        $submission->feedback = $gradedata->feedback ?? '';
+        $submission->feedbackformat = FORMAT_PLAIN;
+        $submission->grader = (int)$USER->id;
+        $submission->timegraded = time();
+        $submission->timemodified = time();
+        $DB->update_record('icontent_submissions', $submission);
+        $transaction->allow_commit();
+        redirect(
+            new moodle_url('/mod/icontent/submissions.php', ['id' => $cm->id]),
+            get_string('submissiongraded', 'icontent')
+        );
+    }
+    echo $OUTPUT->header();
+    echo $OUTPUT->heading(get_string('gradeassignment', 'icontent'));
+    echo html_writer::link(
+        new moodle_url('/mod/icontent/manage_submission.php', ['id' => $cm->id, 'submissionid' => $submissionid]),
+        get_string('managesubmission', 'icontent'),
+        ['class' => 'btn btn-secondary mb-3']
+    );
+    echo html_writer::link(
+        new moodle_url('/mod/icontent/view.php', ['id' => $cm->id, 'submissionid' => $submissionid]),
+        get_string('viewassignmentpages', 'icontent'),
+        ['class' => 'btn btn-secondary mb-3']
+    );
+    $gradeform->display();
+    echo $OUTPUT->footer();
+    exit;
+}
 
 $form = html_writer::start_tag('form', [
     'method' => 'post',
@@ -250,6 +360,13 @@ $form .= html_writer::end_tag('form');
 
 echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('gradeassignment', 'icontent'));
+if ($gradingcontroller && !$gradingcontroller->is_form_available()) {
+    echo $OUTPUT->notification(get_string('rubricnotready', 'icontent'), 'warning');
+    echo $OUTPUT->single_button(
+        $gradingcontroller->get_editor_url($PAGE->url),
+        get_string('definerubric', 'icontent')
+    );
+}
 echo html_writer::link(
     new moodle_url('/mod/icontent/manage_submission.php', ['id' => $cm->id, 'submissionid' => $submissionid]),
     get_string('managesubmission', 'icontent'),

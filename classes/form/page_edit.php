@@ -366,6 +366,16 @@ class page_edit extends \moodleform {
         $mform->setDefault('expandnotesarea', 0);
 
         $mform->addElement('header', 'grade', get_string('gradenoun'));
+        $mform->addElement('advcheckbox', 'userubric', get_string('userubric', 'icontent'));
+        $mform->addHelpButton('userubric', 'userubric', 'icontent');
+        $mform->setType('userubric', PARAM_INT);
+        $mform->setDefault('userubric', 0);
+        $mform->addElement('text', 'rubricmaxmark', get_string('rubricmaxmark', 'icontent'));
+        $mform->addHelpButton('rubricmaxmark', 'rubricmaxmark', 'icontent');
+        $mform->setType('rubricmaxmark', PARAM_FLOAT);
+        $mform->setDefault('rubricmaxmark', 1);
+        $mform->hideIf('rubricmaxmark', 'userubric', 'neq', 1);
+
         $mform->addElement(
             'select',
             'attemptsallowed',
@@ -439,6 +449,13 @@ class page_edit extends \moodleform {
         global $DB;
 
         $errors = parent::validation($data, $files);
+        if (!empty($data['userubric']) && (
+            !is_numeric($data['rubricmaxmark'] ?? null) ||
+            !is_finite((float)$data['rubricmaxmark']) ||
+            (float)$data['rubricmaxmark'] <= 0
+        )) {
+            $errors['rubricmaxmark'] = get_string('rubricmaxmarkinvalid', 'icontent');
+        }
         $branchparentpageid = (int)($data['branchparentpageid'] ?? 0);
         $currentpageid = (int)($data['id'] ?? 0);
 

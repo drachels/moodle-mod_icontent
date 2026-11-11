@@ -24,6 +24,7 @@ require_once($CFG->libdir . '/formslib.php');
  * Teacher controls for reopening submissions and extending deadlines.
  *
  * @package mod_icontent
+ * @copyright 2026 AL Rachels
  * @license http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class submission_management extends \moodleform {

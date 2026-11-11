@@ -70,7 +70,7 @@ if ($isassignmentstudent) {
             throw new required_capability_exception($context, 'mod/icontent:view', 'nopermissions', '');
         }
     }
-} 
+}
 
 if ($pageid) {
     $requestedpage = $DB->get_record('icontent_pages', [
@@ -295,6 +295,9 @@ if ($mform->is_cancelled()) {
         $DB->update_record('icontent_pages', $data);
         // Get page.
         $page = $DB->get_record('icontent_pages', ['id' => $data->id]);
+        if (!empty($page->userubric)) {
+            assignment::sync_page_rubric_maxmark($page, $icontent);
+        }
         // Set log.
         \mod_icontent\event\page_updated::create_from_page($icontent, $context, $page)->trigger();
         // Redirect.

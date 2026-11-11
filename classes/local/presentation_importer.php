@@ -16,12 +16,11 @@
 
 namespace mod_icontent\local;
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
  * Standalone editable presentation import using a restricted LibreOffice process.
  *
  * @package mod_icontent
+ * @copyright 2026 AL Rachels
  * @license http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class presentation_importer {
@@ -199,7 +198,8 @@ class presentation_importer {
                     $html .= self::render_node($node, $zip, $images, $warnings, $xpath);
                 }
                 if ($title === '') {
-                    $title = $page->getAttributeNS(self::NS['draw'], 'name') ?: get_string('importedslidetitle', 'icontent', $index + 1);
+                    $title = $page->getAttributeNS(self::NS['draw'], 'name')
+                        ?: get_string('importedslidetitle', 'icontent', $index + 1);
                 }
                 if (trim($html) === '') {
                     $html = '<p>' . s(get_string('presentationemptyslide', 'icontent')) . '</p>';

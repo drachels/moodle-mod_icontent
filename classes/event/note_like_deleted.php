@@ -98,7 +98,7 @@ class note_like_deleted extends \core\event\base {
         /** @var note_like_deleted $event */
         $event = self::create($data);
         $event->add_record_snapshot('icontent', $icontent);
-        $event->add_record_snapshot('icontent_pages_note_like', $notelike);
+        $event->add_record_snapshot('icontent_pages_notes_like', $notelike);
         return $event;
     }
 }

@@ -20,12 +20,11 @@ use mod_icontent\local\presentation_importer;
 use mod_icontent\local\assignment;
 use Symfony\Component\Process\Process;
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
  * Presentation parsing, conversion and page-set import tests.
  *
  * @package mod_icontent
+ * @copyright 2026 AL Rachels
  * @license http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  * @covers \mod_icontent\local\presentation_importer
  */
@@ -90,7 +89,8 @@ final class presentation_importer_test extends \advanced_testcase {
         $zip->addFromString('mimetype', 'application/vnd.oasis.opendocument.presentation');
         $zip->setCompressionName('mimetype', \ZipArchive::CM_STORE);
         $zip->addFromString('META-INF/manifest.xml',
-            '<?xml version="1.0"?><manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.2">' .
+            '<?xml version="1.0"?><manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0"' .
+            ' manifest:version="1.2">' .
             '<manifest:file-entry manifest:full-path="/" manifest:media-type="application/vnd.oasis.opendocument.presentation"/>' .
             '<manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/>' .
             '<manifest:file-entry manifest:full-path="styles.xml" manifest:media-type="text/xml"/>' .

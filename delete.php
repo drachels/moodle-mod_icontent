@@ -60,6 +60,7 @@ if ($confirm) {
     $fs->delete_area_files($context->id, 'mod_icontent', 'page', $page->id);
     $fs->delete_area_files($context->id, 'mod_icontent', 'bgpage', $page->id);
     // Delete records.
+    \mod_icontent\local\mobile_questions::delete(['pageid' => $page->id]);
     $DB->delete_records('icontent_pages_displayed', ['pageid' => $page->id]);
     // Get page questions for remove items attempts.
     $pagequestions = $DB->get_records('icontent_pages_questions', ['pageid' => $page->id], null, 'id, pageid, cmid');

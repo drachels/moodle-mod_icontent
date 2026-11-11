@@ -483,5 +483,92 @@ function xmldb_icontent_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026103102, 'icontent');
     }
 
+    if ($oldversion < 2026110403) {
+        $table = new xmldb_table('icontent_pages');
+        $field = new xmldb_field('userubric', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'expandquestionsarea');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        $field = new xmldb_field('rubricmaxmark', XMLDB_TYPE_NUMBER, '12, 5', null, XMLDB_NOTNULL, null, '1', 'userubric');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        $table = new xmldb_table('icontent_page_rubric_grades');
+        if (!$dbman->table_exists($table)) {
+            $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+            $table->add_field('pageid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            $table->add_field('cmid', XMLDB_TYPE_INTEGER, '11', null, XMLDB_NOTNULL, null, '0');
+            $table->add_field('userid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            $table->add_field('status', XMLDB_TYPE_CHAR, '20', null, XMLDB_NOTNULL, null, 'toevaluate');
+            $table->add_field('grade', XMLDB_TYPE_NUMBER, '12, 5', null, null, null, null);
+            $table->add_field('maxmark', XMLDB_TYPE_NUMBER, '12, 5', null, XMLDB_NOTNULL, null, '1');
+            $table->add_field('feedback', XMLDB_TYPE_TEXT, null, null, null, null, null);
+            $table->add_field('feedbackformat', XMLDB_TYPE_INTEGER, '4', null, XMLDB_NOTNULL, null, '0');
+            $table->add_field('grader', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            $table->add_field('timecreated', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            $table->add_field('timemodified', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+            $table->add_key('pageid', XMLDB_KEY_FOREIGN, ['pageid'], 'icontent_pages', ['id']);
+            $table->add_index('userpage', XMLDB_INDEX_UNIQUE, ['pageid', 'userid']);
+            $table->add_index('cmidstatus', XMLDB_INDEX_NOTUNIQUE, ['cmid', 'status']);
+            $dbman->create_table($table);
+        }
+
+        upgrade_mod_savepoint(true, 2026110403, 'icontent');
+    }
+
+    if ($oldversion < 2026110501) {
+        $table = new xmldb_table('icontent_pages_questions');
+        $field = new xmldb_field('minimumscore', XMLDB_TYPE_INTEGER, '3', null, XMLDB_NOTNULL, null, '0', 'defaultnextpageid');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        $field = new xmldb_field(
+            'minimumscorenextpageid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', 'minimumscore'
+        );
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        upgrade_mod_savepoint(true, 2026110501, 'icontent');
+    }
+
+    if ($oldversion < 2026110700) {
+        $table = new xmldb_table('icontent_question_attempts');
+        $field = new xmldb_field('maxmark', XMLDB_TYPE_NUMBER, '12, 5', null, XMLDB_NOTNULL, null, '0', 'fraction');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        $attempts = $DB->get_recordset_sql(
+            'SELECT qa.id, COALESCE(NULLIF(pq.maxmark, 0), q.defaultmark, 1) AS maxmark
+               FROM {icontent_question_attempts} qa
+          LEFT JOIN {icontent_pages_questions} pq ON pq.id = qa.pagesquestionsid
+          LEFT JOIN {question} q ON q.id = qa.questionid
+              WHERE qa.maxmark = 0'
+        );
+        foreach ($attempts as $attempt) {
+            $DB->set_field('icontent_question_attempts', 'maxmark', $attempt->maxmark, ['id' => $attempt->id]);
+        }
+        $attempts->close();
+        upgrade_mod_savepoint(true, 2026110700, 'icontent');
+    }
+
+    if ($oldversion < 2026110702) {
+        $table = new xmldb_table('icontent_mobile_usages');
+        if (!$dbman->table_exists($table)) {
+            $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE);
+            foreach (['cmid', 'pageid', 'userid', 'qubaid', 'timecompleted'] as $name) {
+                $table->add_field($name, XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            }
+            $table->add_field('slots', XMLDB_TYPE_TEXT, null, null, XMLDB_NOTNULL);
+            $table->add_field('unsupported', XMLDB_TYPE_TEXT, null, null, XMLDB_NOTNULL);
+            $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+            $table->add_index('userpage', XMLDB_INDEX_UNIQUE, ['userid', 'pageid']);
+            $table->add_index('cmid', XMLDB_INDEX_NOTUNIQUE, ['cmid']);
+            $dbman->create_table($table);
+        }
+        upgrade_mod_savepoint(true, 2026110702, 'icontent');
+    }
+
     return true;
 }

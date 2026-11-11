@@ -34,6 +34,22 @@ require_once($CFG->dirroot . '/mod/icontent/locallib.php');
  * Testcases for branch-style iContent navigation.
  *
  * @covers ::icontent_get_toc
+ * @covers ::icontent_get_fullpageicontent
+ * @covers ::icontent_make_cover_page
+ * @covers ::icontent_get_pagequestions
+ * @covers ::icontent_get_pagequestion_maxmark
+ * @covers ::icontent_get_totalmaxfraction_by_instance
+ * @covers ::icontent_question_engine_phase1_bootstrap_usage
+ * @covers ::icontent_phase3_process_qengine_attempts
+ * @covers ::icontent_get_attempt_summary_by_page
+ * @covers ::icontent_get_right_answers_by_attempt_summary_by_page
+ * @covers ::xmldb_icontent_upgrade
+ * @covers ::icontent_update_questionpage_routes
+ * @covers ::icontent_get_question_routed_next_pageid
+ * @covers \mod_icontent\local\assignment::question_meets_minimum_score
+ * @covers \mod_icontent\local\assignment::page_grade_is_complete
+ * @covers \mod_icontent\local\assignment::can_navigate_to_page
+ * @covers ::icontent_get_infoanswer_by_questionid
  * @covers ::icontent_get_next_pagenum
  * @covers ::icontent_get_prev_pagenum
  * @covers ::icontent_duplicate_page
@@ -47,6 +63,270 @@ final class locallib_test extends \advanced_testcase {
     public function setUp(): void {
         parent::setUp();
         $this->resetAfterTest();
+    }
+
+    /**
+     * Covers use the normal HTML, embedded-file and context-aware filter pipeline.
+     */
+    public function test_cover_page_formats_content_and_filters(): void {
+        global $DB;
+
+        [$course, $module, $icontent] = $this->create_activity_fixture();
+        $this->setAdminUser();
+        $context = \context_module::instance($module->cmid);
+        filter_set_global_state('multilang', TEXTFILTER_OFF);
+        filter_set_local_state('multilang', $context->id, TEXTFILTER_ON);
+        $pageid = $this->create_page($icontent->id, $module->cmid, 1, 'Cover', [
+            'coverpage' => 1,
+            'pageicontent' => '<p><a class="btn btn-primary" href="https://example.com/">Open link</a></p>' .
+                '<span lang="en" class="multilang">English cover</span>' .
+                '<span lang="fr" class="multilang">French cover</span>' .
+                '<img src="@@PLUGINFILE@@/cover.png" alt="Cover image">',
+        ]);
+        $cover = \icontent_get_fullpageicontent(1, $icontent, $context);
+        $html = $cover->fullpageicontent;
+        $this->assertStringContainsString('<a class="btn btn-primary" href="https://example.com/">Open link</a>', $html);
+        $this->assertStringContainsString('English cover', $html);
+        $this->assertStringNotContainsString('French cover', $html);
+        $this->assertStringNotContainsString('@@PLUGINFILE@@', $html);
+        $fileurl = \moodle_url::make_pluginfile_url($context->id, 'mod_icontent', 'page', $pageid, '/', 'cover.png');
+        $this->assertStringContainsString($fileurl->out(), $html);
+        $this->assertStringNotContainsString('read-more-target', $html);
+
+        $DB->set_field('icontent_pages', 'coverpage', 0, ['id' => $pageid]);
+        $normal = \icontent_get_fullpageicontent(1, $icontent, $context);
+        $this->assertStringContainsString('English cover', $normal->fullpageicontent);
+        $this->assertStringNotContainsString('French cover', $normal->fullpageicontent);
+        $this->assertStringContainsString($fileurl->out(), $normal->fullpageicontent);
+    }
+
+    /**
+     * Long covers retain complete widgets, with a safe character-based preview.
+     */
+    public function test_cover_page_long_content_is_not_split_or_duplicated(): void {
+        [$course, $module, $icontent] = $this->create_activity_fixture();
+        $this->setAdminUser();
+        $context = \context_module::instance($module->cmid);
+        $text = str_repeat("\xc3\xa9", 490) . ' &lt;button&gt; ';
+        $widget = '<button type="button" id="cover-widget">Open widget</button>';
+        $this->create_page($icontent->id, $module->cmid, 1, 'Long cover', [
+            'coverpage' => 1,
+            'pageicontent' => '<p>' . $text . '</p>' . $widget,
+        ]);
+
+        $html = \icontent_get_fullpageicontent(1, $icontent, $context)->fullpageicontent;
+        $this->assertStringContainsString('class="suspension-points"', $html);
+        $this->assertStringContainsString('class="read-more-target"', $html);
+        $this->assertStringContainsString('<p>' . $text . '</p>' . $widget, $html);
+        $this->assertSame(1, substr_count($html, 'id="cover-widget"'));
+        $this->assertStringContainsString('read-more-state-on', $html);
+        $this->assertStringContainsString('read-more-state-off', $html);
+        $dom = new \DOMDocument();
+        $dom->loadHTML('<?xml encoding="UTF-8">' . $html);
+        $xpath = new \DOMXPath($dom);
+        $preview = $xpath->query('//div[@class="suspension-points"]')->item(0);
+        $this->assertSame(503, \core_text::strlen($preview->textContent));
+        $this->assertSame(0, $preview->getElementsByTagName('button')->length);
+    }
+
+    /**
+     * Media-only covers remain visible and 500 characters do not trigger Show more.
+     */
+    public function test_cover_page_media_and_preview_boundary(): void {
+        global $DB;
+
+        [$course, $module, $icontent] = $this->create_activity_fixture();
+        $this->setAdminUser();
+        $context = \context_module::instance($module->cmid);
+        $pageid = $this->create_page($icontent->id, $module->cmid, 1, 'Media cover', [
+            'coverpage' => 1,
+            'pageicontent' => '<img src="@@PLUGINFILE@@/cover.png" alt="">',
+        ]);
+        $html = \icontent_get_fullpageicontent(1, $icontent, $context)->fullpageicontent;
+        $this->assertStringContainsString('<img ', $html);
+        $this->assertStringNotContainsString('contentcoverpage hide', $html);
+
+        foreach ([500, 501] as $length) {
+            $DB->set_field('icontent_pages', 'pageicontent', str_repeat("\xc3\xa9", $length), ['id' => $pageid]);
+            $html = \icontent_get_fullpageicontent(1, $icontent, $context)->fullpageicontent;
+            $this->assertSame($length > 500, str_contains($html, 'read-more-target'));
+        }
+    }
+
+    /**
+     * New bank versions change new attempts, not previously awarded points.
+     */
+    public function test_updated_question_points_preserve_historical_results(): void {
+        global $DB, $SESSION;
+
+        [$course, $module, $icontent, $student] = $this->create_activity_fixture();
+        $this->setAdminUser();
+        $questiongenerator = $this->getDataGenerator()->get_plugin_generator('core_question');
+        $category = $questiongenerator->create_question_category();
+        $original = $questiongenerator->create_question('multichoice', null, [
+            'category' => $category->id,
+            'defaultmark' => 4,
+        ]);
+        $pageid = $this->create_page($icontent->id, $module->cmid, 1, 'Question');
+        $destinationid = $this->create_page($icontent->id, $module->cmid, 2, 'Destination');
+        \icontent_add_questionpage([$original->id], $pageid, $module->cmid);
+        $mapping = $DB->get_record('icontent_pages_questions', ['pageid' => $pageid], '*', MUST_EXIST);
+        $mapping->minimumscore = 100;
+        $mapping->minimumscorenextpageid = $destinationid;
+        $DB->update_record('icontent_pages_questions', $mapping);
+        $page = $DB->get_record('icontent_pages', ['id' => $pageid], '*', MUST_EXIST);
+        $this->setUser($student);
+        $attemptid = $DB->insert_record('icontent_question_attempts', (object)[
+            'pagesquestionsid' => $mapping->id,
+            'questionid' => $original->id,
+            'cmid' => $module->cmid,
+            'userid' => $student->id,
+            'fraction' => 4,
+            'maxmark' => 4,
+            'rightanswer' => 'correct',
+            'timecreated' => 100,
+        ]);
+        $questions = \icontent_get_pagequestions($pageid, $module->cmid);
+        \icontent_question_engine_phase1_bootstrap_usage($page, $questions);
+        $sessionkey = \icontent_question_engine_phase1_get_session_key($module->cmid, $pageid, $student->id);
+        $originalusageid = $SESSION->mod_icontent_quba[$sessionkey];
+
+        $this->setAdminUser();
+        $latest = $questiongenerator->update_question($original, null, ['defaultmark' => 3]);
+        $this->assertNotEquals($original->id, $latest->id);
+        $this->setUser($student);
+        $questions = \icontent_get_pagequestions($pageid, $module->cmid);
+        $this->assertEquals(3.0, reset($questions)->maxmark);
+        $this->assertEquals(3.0, \icontent_get_totalmaxfraction_by_instance($module->cmid));
+        $this->assertEquals(4.0, \icontent_get_totalmaxfraction_by_instance($module->cmid, (int)$student->id));
+        $summary = \icontent_get_attempt_summary_by_page($pageid, $module->cmid);
+        $this->assertEquals(4.0, $summary->sumfraction);
+        $this->assertEquals(4.0, $summary->maxfraction);
+        $this->assertEquals(1, \icontent_get_right_answers_by_attempt_summary_by_page($pageid, $module->cmid)->totalrightanswers);
+        $this->assertTrue(\mod_icontent\local\assignment::page_grade_is_complete($page, (int)$student->id));
+        $this->assertSame($destinationid, \icontent_get_question_routed_next_pageid($page));
+
+        \icontent_question_engine_phase1_bootstrap_usage($page, $questions);
+        $usageid = $SESSION->mod_icontent_quba[$sessionkey];
+        $this->assertNotEquals($originalusageid, $usageid);
+        $quba = \question_engine::load_questions_usage_by_activity($usageid);
+        $slots = $quba->get_slots();
+        $slot = reset($slots);
+        $this->assertEquals($latest->id, $quba->get_question($slot)->id);
+        $this->assertEquals(3.0, $quba->get_question_max_mark($slot));
+        \icontent_question_engine_phase1_bootstrap_usage($page, $questions);
+        $this->assertEquals($usageid, $SESSION->mod_icontent_quba[$sessionkey]);
+
+        // Also repair usages already cached with the latest version but old points.
+        $quba->set_max_mark($slot, 4);
+        \question_engine::save_questions_usage_by_activity($quba);
+        \icontent_question_engine_phase1_bootstrap_usage($page, $questions);
+        $this->assertNotEquals($usageid, $SESSION->mod_icontent_quba[$sessionkey]);
+        $quba = \question_engine::load_questions_usage_by_activity($SESSION->mod_icontent_quba[$sessionkey]);
+        $slots = $quba->get_slots();
+        $slot = reset($slots);
+        $this->assertEquals(3.0, $quba->get_question_max_mark($slot));
+
+        $postdata = $questiongenerator->get_simulated_post_data_for_questions_in_usage($quba, [$slot => 'One; Three'], false);
+        $cm = get_coursemodule_from_id('icontent', $module->cmid, 0, false, MUST_EXIST);
+        $records = \icontent_phase3_process_qengine_attempts($postdata, $cm, $pageid);
+        $this->assertCount(1, $records);
+        $this->assertEquals(3.0, $records[0]->maxmark);
+        $this->assertEquals(3.0, $records[0]->fraction);
+        $DB->insert_records('icontent_question_attempts', $records);
+        $this->assertEquals(4.0, $DB->get_field('icontent_question_attempts', 'fraction', ['id' => $attemptid]));
+        $summary = \icontent_get_attempt_summary_by_page($pageid, $module->cmid);
+        $this->assertEquals(3.0, $summary->sumfraction);
+        $this->assertEquals(3.0, $summary->maxfraction);
+        $this->assertEquals(3.0, \icontent_get_totalmaxfraction_by_instance($module->cmid, (int)$student->id));
+        $this->assertTrue(\mod_icontent\local\assignment::page_grade_is_complete($page, (int)$student->id));
+        $this->assertSame($destinationid, \icontent_get_question_routed_next_pageid($page));
+        $this->assertEquals(4.0, $DB->get_field('icontent_pages_questions', 'maxmark', ['id' => $mapping->id]));
+    }
+
+    /**
+     * Explicit mapping maxima and legacy zero-snapshot attempts keep their points.
+     */
+    public function test_question_point_overrides_and_legacy_attempts(): void {
+        global $DB;
+
+        [$course, $module, $icontent, $student] = $this->create_activity_fixture();
+        $this->setAdminUser();
+        $questiongenerator = $this->getDataGenerator()->get_plugin_generator('core_question');
+        $category = $questiongenerator->create_question_category();
+        $original = $questiongenerator->create_question('multichoice', null, [
+            'category' => $category->id,
+            'defaultmark' => 4,
+        ]);
+        $pageid = $this->create_page($icontent->id, $module->cmid, 1, 'Override');
+        \icontent_add_questionpage([$original->id], $pageid, $module->cmid);
+        $mapping = $DB->get_record('icontent_pages_questions', ['pageid' => $pageid], '*', MUST_EXIST);
+        $DB->set_field('icontent_pages_questions', 'maxmark', 5, ['id' => $mapping->id]);
+        $questiongenerator->update_question($original, null, ['defaultmark' => 3]);
+        $questions = \icontent_get_pagequestions($pageid, $module->cmid);
+        $this->assertEquals(5.0, reset($questions)->maxmark);
+
+        $DB->set_field('icontent_pages_questions', 'maxmark', 4, ['id' => $mapping->id]);
+        $this->setUser($student);
+        $DB->insert_record('icontent_question_attempts', (object)[
+            'pagesquestionsid' => $mapping->id,
+            'questionid' => $original->id,
+            'cmid' => $module->cmid,
+            'userid' => $student->id,
+            'fraction' => 4,
+            'rightanswer' => 'correct',
+            'timecreated' => 100,
+        ]);
+        $this->assertEquals(4.0, \icontent_get_attempt_summary_by_page($pageid, $module->cmid)->maxfraction);
+        $this->assertEquals(4.0, \icontent_get_totalmaxfraction_by_instance($module->cmid, (int)$student->id));
+        $answers = \icontent_get_submitted_answers_by_attempt_summary_by_page($pageid, $module->cmid);
+        $this->assertEquals(4.0, reset($answers)->maxmark);
+    }
+
+    /**
+     * The upgrade snapshots the old scale without changing earned or final grades.
+     */
+    public function test_question_point_upgrade_preserves_existing_grades(): void {
+        global $CFG, $DB;
+
+        require_once($CFG->libdir . '/upgradelib.php');
+        require_once($CFG->dirroot . '/mod/icontent/db/upgrade.php');
+        [$course, $module, $icontent, $student] = $this->create_activity_fixture();
+        $this->setAdminUser();
+        $questiongenerator = $this->getDataGenerator()->get_plugin_generator('core_question');
+        $category = $questiongenerator->create_question_category();
+        $question = $questiongenerator->create_question('multichoice', null, [
+            'category' => $category->id,
+            'defaultmark' => 4,
+        ]);
+        $pageid = $this->create_page($icontent->id, $module->cmid, 1, 'Old answer');
+        \icontent_add_questionpage([$question->id], $pageid, $module->cmid);
+        $mapping = $DB->get_record('icontent_pages_questions', ['pageid' => $pageid], '*', MUST_EXIST);
+        $attemptid = $DB->insert_record('icontent_question_attempts', (object)[
+            'pagesquestionsid' => $mapping->id,
+            'questionid' => $question->id,
+            'cmid' => $module->cmid,
+            'userid' => $student->id,
+            'fraction' => 2,
+            'rightanswer' => 'partial',
+            'timecreated' => 100,
+        ]);
+        $gradeid = $DB->insert_record('icontent_grades', (object)[
+            'icontentid' => $icontent->id,
+            'cmid' => $module->cmid,
+            'userid' => $student->id,
+            'grade' => 50,
+            'timemodified' => 100,
+        ]);
+        $questiongenerator->update_question($question, null, ['defaultmark' => 3]);
+        set_config('version', 2026110501, 'mod_icontent');
+        $this->assertTrue(\xmldb_icontent_upgrade(2026110501));
+        $attempt = $DB->get_record('icontent_question_attempts', ['id' => $attemptid], '*', MUST_EXIST);
+        $this->assertEquals(4.0, $attempt->maxmark);
+        $this->assertEquals(2.0, $attempt->fraction);
+        $grade = $DB->get_record('icontent_grades', ['id' => $gradeid], '*', MUST_EXIST);
+        $this->assertEquals(50.0, $grade->grade);
+        $this->assertEquals(100, $grade->timemodified);
     }
 
     /**
@@ -468,6 +748,183 @@ final class locallib_test extends \advanced_testcase {
         $this->assertCount(1, $newbgfiles);
         $this->assertSame('inline.txt', reset($newpagefiles)->get_filename());
         $this->assertSame('background.png', reset($newbgfiles)->get_filename());
+    }
+
+    /**
+     * Minimum percentages use the latest net mark, not a count of selected options.
+     */
+    public function test_minimum_score_gates_navigation_and_overrides_other_question_routes(): void {
+        global $DB;
+
+        [$course, $module, $icontent, $student] = $this->create_activity_fixture();
+        $this->setUser($student);
+        $previousid = $this->create_page($icontent->id, $module->cmid, 1, 'Previous');
+        $sourceid = $this->create_page($icontent->id, $module->cmid, 2, 'Question');
+        $destinationid = $this->create_page($icontent->id, $module->cmid, 3, 'Threshold destination');
+        $otherid = $this->create_page($icontent->id, $module->cmid, 4, 'Other outcome');
+        $mappingid = (int)$DB->insert_record('icontent_pages_questions', (object)[
+            'pageid' => $sourceid,
+            'cmid' => $module->cmid,
+            'questionid' => 999999,
+            'maxmark' => 10,
+        ]);
+        $this->assertTrue(\icontent_update_questionpage_routes(
+            $sourceid, (int)$module->cmid,
+            [999999 => $otherid], [999999 => $otherid], [999999 => $otherid], [999999 => $otherid],
+            [999999 => 70], [999999 => $destinationid]
+        ));
+        $source = $DB->get_record('icontent_pages', ['id' => $sourceid], '*', MUST_EXIST);
+        $target = $DB->get_record('icontent_pages', ['id' => $destinationid], '*', MUST_EXIST);
+        $previous = $DB->get_record('icontent_pages', ['id' => $previousid], '*', MUST_EXIST);
+        $this->assertFalse(\mod_icontent\local\assignment::page_grade_is_complete($source, (int)$student->id));
+        $this->assertSame(0, \icontent_get_question_routed_next_pageid($source));
+
+        foreach ([
+            [6.9, 'incorrect', false],
+            [7, 'incorrect', true],
+            [6, 'incorrect', false],
+            [10, ICONTENT_QTYPE_ESSAY_STATUS_TOEVALUATE, false],
+            [10, ICONTENT_QTYPE_ESSAY_STATUS_VALUED, true],
+            [-1, 'incorrect', false],
+        ] as [$mark, $status, $meetsminimum]) {
+            $DB->insert_record('icontent_question_attempts', (object)[
+                'pagesquestionsid' => $mappingid,
+                'questionid' => 999999,
+                'cmid' => $module->cmid,
+                'userid' => $student->id,
+                'fraction' => $mark,
+                'rightanswer' => $status,
+                'timecreated' => 100,
+            ]);
+            $this->assertSame(
+                $meetsminimum,
+                \mod_icontent\local\assignment::can_navigate_to_page($source, $target, (int)$student->id)
+            );
+            $this->assertTrue(\mod_icontent\local\assignment::can_navigate_to_page($source, $previous, (int)$student->id));
+            $this->assertSame($meetsminimum ? $destinationid : 0, \icontent_get_question_routed_next_pageid($source));
+        }
+
+        $this->assertTrue(\icontent_update_questionpage_routes(
+            $sourceid, (int)$module->cmid, [], [999999 => $otherid], [], [], [999999 => 0], [999999 => 0]
+        ));
+        $this->assertTrue(\mod_icontent\local\assignment::can_navigate_to_page($source, $target, (int)$student->id));
+        $this->assertSame($otherid, \icontent_get_question_routed_next_pageid($source));
+    }
+
+    /**
+     * Multi-answer legacy grading includes distractor penalties in minimum scores.
+     */
+    public function test_minimum_score_uses_net_multichoice_grade(): void {
+        global $DB;
+
+        $answers = [];
+        for ($index = 0; $index < 15; $index++) {
+            $answerid = $DB->insert_record('question_answers', (object)[
+                'question' => 999999,
+                'answer' => 'Option ' . $index,
+                'fraction' => $index < 10 ? 0.1 : -0.1,
+                'feedback' => '',
+            ]);
+            $answers[] = 'qpid-1_answerid-' . $answerid;
+        }
+        $mapping = (object)['minimumscore' => 70, 'effectivemaxmark' => 10];
+        $response = \icontent_get_infoanswer_by_questionid(999999, ICONTENT_QTYPE_MULTICHOICE, array_slice($answers, 0, 7));
+        $this->assertEqualsWithDelta(0.7, $response->fraction, 0.0000001);
+        $this->assertTrue(\mod_icontent\local\assignment::question_meets_minimum_score($mapping, (object)[
+            'fraction' => $response->fraction * 10, 'rightanswer' => $response->rightanswer,
+        ]));
+        $response = \icontent_get_infoanswer_by_questionid(
+            999999, ICONTENT_QTYPE_MULTICHOICE, array_merge(array_slice($answers, 0, 7), [$answers[10]])
+        );
+        $this->assertEqualsWithDelta(0.6, $response->fraction, 0.0000001);
+        $this->assertFalse(\mod_icontent\local\assignment::question_meets_minimum_score($mapping, (object)[
+            'fraction' => $response->fraction * 10, 'rightanswer' => $response->rightanswer,
+        ]));
+    }
+
+    /**
+     * Minimum-score routes can leave the last page and stay inside their submission.
+     */
+    public function test_minimum_score_route_from_last_submission_page(): void {
+        global $DB;
+
+        [$course, $module, $icontent, $student] = $this->create_activity_fixture();
+        $this->setUser($student);
+        $targetid = $this->create_page($icontent->id, $module->cmid, 1, 'Destination', ['submissionid' => 10]);
+        $sourceid = $this->create_page($icontent->id, $module->cmid, 2, 'Question', ['submissionid' => 10]);
+        $mappingid = (int)$DB->insert_record('icontent_pages_questions', (object)[
+            'pageid' => $sourceid,
+            'cmid' => $module->cmid,
+            'questionid' => 999999,
+            'maxmark' => 5,
+            'minimumscore' => 70,
+            'minimumscorenextpageid' => $targetid,
+        ]);
+        $source = $DB->get_record('icontent_pages', ['id' => $sourceid], '*', MUST_EXIST);
+        $target = $DB->get_record('icontent_pages', ['id' => $targetid], '*', MUST_EXIST);
+        $this->assertFalse(\mod_icontent\local\assignment::can_navigate_to_page($source, $target, (int)$student->id));
+        $DB->insert_record('icontent_question_attempts', (object)[
+            'pagesquestionsid' => $mappingid,
+            'questionid' => 999999,
+            'cmid' => $module->cmid,
+            'userid' => $student->id,
+            'fraction' => 3.5,
+            'rightanswer' => 'incorrect',
+            'timecreated' => time(),
+        ]);
+        $this->assertSame($targetid, \icontent_get_question_routed_next_pageid($source));
+        $this->assertSame(1, \icontent_get_next_pagenum($source));
+        $this->assertTrue(\mod_icontent\local\assignment::can_navigate_to_page($source, $target, (int)$student->id));
+    }
+
+    /**
+     * Invalid minimum scores and destinations are rejected without changing mappings.
+     *
+     * @dataProvider invalid_minimum_score_provider
+     * @param string $score Submitted percentage.
+     * @param string $target Destination fixture name.
+     */
+    public function test_invalid_minimum_score_is_rejected(string $score, string $target): void {
+        global $DB;
+
+        [$course, $module, $icontent, $student] = $this->create_activity_fixture();
+        $sourceid = $this->create_page($icontent->id, $module->cmid, 1, 'Question');
+        $targetids = [
+            'none' => 0,
+            'self' => $sourceid,
+            'valid' => $this->create_page($icontent->id, $module->cmid, 2, 'Valid'),
+            'hidden' => $this->create_page($icontent->id, $module->cmid, 3, 'Hidden', ['hidden' => 1]),
+            'submission' => $this->create_page($icontent->id, $module->cmid, 1, 'Private', ['submissionid' => 10]),
+        ];
+        $DB->insert_record('icontent_pages_questions', (object)[
+            'pageid' => $sourceid,
+            'cmid' => $module->cmid,
+            'questionid' => 999999,
+        ]);
+        $this->expectException(\moodle_exception::class);
+        $this->expectExceptionMessage(get_string('invalidminimumscore', 'icontent'));
+        \icontent_update_questionpage_routes(
+            $sourceid, (int)$module->cmid, [], [], [], [], [999999 => $score], [999999 => $targetids[$target]]
+        );
+    }
+
+    /**
+     * Invalid score/route pairs.
+     *
+     * @return array
+     */
+    public static function invalid_minimum_score_provider(): array {
+        return [
+            'negative' => ['-1', 'valid'],
+            'too high' => ['101', 'valid'],
+            'fractional percentage' => ['70.5', 'valid'],
+            'not numeric' => ['invalid', 'valid'],
+            'missing destination' => ['70', 'none'],
+            'disabled destination' => ['0', 'valid'],
+            'same page' => ['70', 'self'],
+            'hidden page' => ['70', 'hidden'],
+            'different submission' => ['70', 'submission'],
+        ];
     }
 
     /**

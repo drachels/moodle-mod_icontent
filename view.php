@@ -34,6 +34,7 @@ $id = optional_param('id', 0, PARAM_INT); // Course_module ID.
 $n  = optional_param('n', 0, PARAM_INT); // Icontent instance ID.
 $edit = optional_param('edit', -1, PARAM_BOOL); // Edit mode.
 $pageid = optional_param('pageid', null, PARAM_INT); // Chapter ID.
+$sourcepageid = 0;
 $requestedsubmissionid = optional_param('submissionid', 0, PARAM_INT);
 $removeqpid = optional_param('removeqpid', 0, PARAM_INT);
 $savetags = optional_param('savetags', 0, PARAM_BOOL);
@@ -124,6 +125,24 @@ if (!empty($icontent->assignmentmode)) {
             throw new required_capability_exception($context, 'mod/icontent:view', 'nopermissions', '');
         }
         $submissionid = (int)$submission->id;
+    }
+}
+
+if ($pageid !== null) {
+    $targetpage = $DB->get_record('icontent_pages', [
+        'id' => $pageid,
+        'cmid' => $cm->id,
+        'icontentid' => $icontent->id,
+        'submissionid' => $submissionid,
+    ], '*', MUST_EXIST);
+    $currentpage = assignment::get_last_viewed_page((int)$cm->id, (int)$USER->id, $submissionid);
+    if ($currentpage && (int)$currentpage->id !== (int)$targetpage->id) {
+        if (!$canmanage && !assignment::can_navigate_to_page($currentpage, $targetpage, (int)$USER->id)) {
+            throw new moodle_exception('pagegradingrequired', 'mod_icontent');
+        }
+        $sourcepageid = (int)$currentpage->id;
+    } else {
+        $sourcepageid = 0;
     }
 }
 
@@ -237,7 +256,7 @@ $startwithpage = $pageid !== null
     ? icontent_get_pagenum_by_pageid($pageid)
     : icontent_get_startpagenum($icontent, $context, $submissionid);
 $showpage = $pages
-    ? icontent_get_fullpageicontent($startwithpage, $icontent, $context, $pageid ?? 0, $submissionid)
+    ? icontent_get_fullpageicontent($startwithpage, $icontent, $context, $sourcepageid, $submissionid)
     : (object)['fullpageicontent' => ''];
 
 icontent_add_fake_block($pages, $startwithpage, $icontent, $cm, $edit); // Add block summary.
@@ -405,6 +424,10 @@ if (!empty($icontent->assignmentmode)) {
                             'icontent-assignment-feedback'
                         );
                     }
+                }
+                $rubrichtml = assignment::render_submission_rubric($context, $icontent, (int)$ownsubmission->id);
+                if ($rubrichtml !== '') {
+                    echo $rubrichtml;
                 }
             }
         } else {

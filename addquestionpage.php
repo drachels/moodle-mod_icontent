@@ -125,6 +125,8 @@ if ($action) {
     $incorrectroutes = optional_param_array('routeincorrect', [], PARAM_INT);
     $manualreviewroutes = optional_param_array('routemanualreview', [], PARAM_INT);
     $defaultroutes = optional_param_array('routedefault', [], PARAM_INT);
+    $minimumscores = optional_param_array('minimumscore', [], PARAM_RAW_TRIMMED);
+    $minimumscoreroutes = optional_param_array('routeminimumscore', [], PARAM_INT);
 
     $remapquestionids = static function (array $questionids, array $map): array {
         $result = [];
@@ -150,7 +152,7 @@ if ($action) {
 
             $mappedqid = (int)($map[$questionid] ?? $questionid);
             if (!array_key_exists($mappedqid, $result)) {
-                $result[$mappedqid] = (int)$targetpageid;
+                $result[$mappedqid] = $targetpageid;
             }
         }
 
@@ -163,7 +165,10 @@ if ($action) {
     $incorrectroutes = $remaproutekeys($incorrectroutes, $questionidremap);
     $manualreviewroutes = $remaproutekeys($manualreviewroutes, $questionidremap);
     $defaultroutes = $remaproutekeys($defaultroutes, $questionidremap);
+    $minimumscores = $remaproutekeys($minimumscores, $questionidremap);
+    $minimumscoreroutes = $remaproutekeys($minimumscoreroutes, $questionidremap);
 
+    $transaction = $DB->start_delegated_transaction();
     $questionsremoved = false;
     if (!icontent_checks_answers_of_currentpage((int)$pageid, (int)$cm->id) && !empty($displayedquestionids)) {
         $existingmappings = icontent_get_questions_of_currentpage((int)$pageid, (int)$cm->id);
@@ -190,8 +195,11 @@ if ($action) {
         $correctroutes,
         $incorrectroutes,
         $manualreviewroutes,
-        $defaultroutes
+        $defaultroutes,
+        $minimumscores,
+        $minimumscoreroutes
     );
+    $transaction->allow_commit();
 
     if ($questionsadded || $questionsremoved || $routesupdated) {
         if ($questionsadded) {
@@ -332,7 +340,11 @@ if (is_object($answerscurrentpage)) {
     $answerscount = 0;
 }
 $routepageoptions = [0 => get_string('none')];
-$routepages = $DB->get_records('icontent_pages', ['cmid' => $cm->id, 'hidden' => 0], 'pagenum ASC', 'id, pagenum, title');
+$routepages = $DB->get_records('icontent_pages', [
+    'cmid' => $cm->id,
+    'hidden' => 0,
+    'submissionid' => $currentpage->submissionid,
+], 'pagenum ASC', 'id, pagenum, title');
 foreach ($routepages as $routepage) {
     $routepagetitle = format_string((string)$routepage->title);
     $routepageparams = (object)[
@@ -551,7 +563,6 @@ if ($hasquestions) {
 
         $existingmapping = $qtscurrentpagebydisplayqid[$question->qid] ?? null;
 
-        $routecontrols = html_writer::start_div('icontent-route-grid');
         $routefields = [
             'routecorrect' => [
                 'label' => get_string('routecorrect', 'icontent'),
@@ -569,7 +580,20 @@ if ($hasquestions) {
                 'label' => get_string('routedefault', 'icontent'),
                 'selected' => (int)($existingmapping->defaultnextpageid ?? 0),
             ],
+            'routeminimumscore' => [
+                'label' => get_string('routeminimumscore', 'icontent'),
+                'selected' => (int)($existingmapping->minimumscorenextpageid ?? 0),
+            ],
         ];
+        $routesconfigured = (int)($existingmapping->minimumscore ?? 0) > 0;
+        foreach ($routefields as $routefield) {
+            $routesconfigured = $routesconfigured || $routefield['selected'] > 0;
+        }
+        $routecontrols = html_writer::start_tag('details', [
+            'class' => 'icontent-route-details',
+        ] + ($routesconfigured ? ['open' => 'open'] : []));
+        $routecontrols .= html_writer::tag('summary', get_string('routingtargets', 'icontent'));
+        $routecontrols .= html_writer::start_div('icontent-route-grid mt-2');
         foreach ($routefields as $routename => $routefield) {
             $routeinputid = 'id_' . $routename . '_' . (int)$question->qid;
             $routecontrols .= html_writer::start_div('icontent-route-field');
@@ -583,7 +607,28 @@ if ($hasquestions) {
             );
             $routecontrols .= html_writer::end_div();
         }
+        $scoreinputid = 'id_minimumscore_' . (int)$question->qid;
+        $routecontrols .= html_writer::start_div('icontent-route-field');
+        $routecontrols .= html_writer::start_div('d-flex align-items-center');
+        $routecontrols .= html_writer::tag('label', get_string('minimumscore', 'icontent'), [
+            'for' => $scoreinputid,
+            'class' => 'small',
+        ]);
+        $routecontrols .= $OUTPUT->help_icon('minimumscore', 'icontent');
         $routecontrols .= html_writer::end_div();
+        $routecontrols .= html_writer::empty_tag('input', [
+            'type' => 'number',
+            'id' => $scoreinputid,
+            'name' => 'minimumscore[' . (int)$question->qid . ']',
+            'value' => (int)($existingmapping->minimumscore ?? 0),
+            'min' => 0,
+            'max' => 100,
+            'step' => 1,
+            'class' => 'form-control form-control-sm',
+        ] + $disabled);
+        $routecontrols .= html_writer::end_div();
+        $routecontrols .= html_writer::end_div();
+        $routecontrols .= html_writer::end_tag('details');
 
         $table->data[] = [
             $checkbox,
@@ -592,8 +637,16 @@ if ($hasquestions) {
             $actions,
             $question->qvstatus,
             (int)$question->qvversion,
-            $createdby->firstname . ' ' . $createdby->lastname .
-                '<br>' . date(get_config('mod_icontent', 'dateformat'), $question->qtimecreated),
+            html_writer::tag(
+                'details',
+                html_writer::tag('summary', get_string('createdby', 'question')) .
+                html_writer::div(
+                    s($createdby->firstname . ' ' . $createdby->lastname) .
+                    '<br>' . s(date(get_config('mod_icontent', 'dateformat'), $question->qtimecreated)),
+                    'mt-2'
+                ),
+                ['class' => 'icontent-creator-details']
+            ),
             $commentdisplay,
             $routecontrols,
             $needschecking,
@@ -654,6 +707,21 @@ echo html_writer::start_tag(
 );
 echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
 echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'action', 'value' => true]);
+$returnurl = new moodle_url('/mod/icontent/view.php', [
+    'id' => $cm->id,
+    'pageid' => $pageid,
+    'submissionid' => $currentpage->submissionid,
+]);
+$questioncontrols = html_writer::div(
+    html_writer::tag('button', get_string('savequestionselection', 'mod_icontent'), [
+        'type' => 'submit',
+        'class' => 'btn btn-primary',
+    ] + ($hasquestions ? [] : ['disabled' => 'disabled'])) . ' ' .
+    html_writer::link($returnurl, get_string('cancel'), ['class' => 'btn btn-secondary']),
+    'my-3'
+);
+echo $questioncontrols;
+echo $OUTPUT->paging_bar($tquestions, $page, $perpage, $url);
 if (!empty($questionids)) {
     foreach ($questionids as $questionid) {
         echo html_writer::empty_tag('input', [
@@ -673,6 +741,13 @@ echo html_writer::script("(function() {
 
     var master = document.getElementById('idcheckallquestions');
     var toggleColumnClass = 'icontent-col-resized';
+
+    table.addEventListener('invalid', function(e) {
+        var details = e.target.closest('.icontent-route-details');
+        if (details) {
+            details.open = true;
+        }
+    }, true);
 
     function getColumnIndex(cell) {
         if (!cell || !cell.parentNode) {
@@ -751,27 +826,7 @@ echo html_writer::script("(function() {
 echo $OUTPUT->paging_bar($tquestions, $page, $perpage, $url);
 echo html_writer::end_div();
 
-// 20240107 Create a link back to where we came from in case we want to cancel.
-$url2 = new moodle_url(
-    '/mod/icontent/view.php',
-    [
-        'id' => $id,
-        'pageid' => $pageid,
-    ]
-);
-// 20240107 Added two buttons, Add and Cancel..
-echo '<input class="btn btn-primary"
-    style="border-radius: 8px"
-    name="button"
-    onClick="return clClick()"
-    ' . ($hasquestions ? '' : 'disabled="disabled"') . '
-    type="submit" value="'
-    . get_string('savequestionselection', 'mod_icontent')
-    . '"> <a href="'
-    . $url2
-    . '" class="btn btn-secondary"  style="border-radius: 8px">'
-    . get_string('cancel')
-    . '</a>';
+echo $questioncontrols;
 echo html_writer::end_tag('form');
 
 // Finish the page.

@@ -94,12 +94,13 @@ if ($tquestinstance <= 0) {
 // Make table questions.
 $table = new html_table();
 $table->id = "idtableattemptsusers";
-$table->colclasses = ['fullname', 'answers', 'result', 'grades'];
+$table->colclasses = ['fullname', 'answers', 'result', 'rubric', 'grades'];
 $table->attributes = ['class' => 'table table-hover tableattemptsusers'];
 $table->head  = [get_string('fullname'),
     get_string('answers', 'mod_icontent'),
-    get_string('partialresult', 'mod_icontent'),
-    get_string('gradingscale', 'mod_icontent', $icontent->grade),
+    get_string('pagescoresubtotal', 'mod_icontent'),
+    get_string('rubricscoresubtotal', 'mod_icontent'),
+    get_string('activitygrade', 'mod_icontent'),
 ];
 
 if ($attemptsusers) {
@@ -136,14 +137,19 @@ if ($attemptsusers) {
         $evaluate->maxfraction = number_format($attemptmaxfraction, 2);
         $evaluate->percentage = $attemptmaxfraction > 0 ? round(($attemptuser->sumfraction * 100) / $attemptmaxfraction) : 0;
         $evaluate->openanswer = $stropenanswer;
-        $evaluate->finalgrade = $tquestinstance > 0 ? ($attemptuser->sumfraction * $icontent->grade) / $tquestinstance : 0;
+        $usermaxfraction = icontent_get_totalmaxfraction_by_instance($cm->id, (int)$attemptuser->id);
+        $evaluate->finalgrade = $usermaxfraction > 0 ? ($attemptuser->sumfraction * $icontent->grade) / $usermaxfraction : 0;
         $strevaluate = get_string('strtoevaluate', 'mod_icontent', $evaluate);
+        [$rubricscore, $activitygrade] = \mod_icontent\local\assignment::get_report_score_columns(
+            $icontent, $cm, (int)$attemptuser->id
+        );
         // Set data.
         $table->data[] = [
             $picture . $linkfirstname,
             $attemptuser->totalanswers,
             $strevaluate,
-            number_format($evaluate->finalgrade, 2),
+            $rubricscore,
+            $activitygrade,
         ];
     }
 } else {

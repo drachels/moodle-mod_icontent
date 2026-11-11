@@ -78,10 +78,26 @@ function icontent_supports($feature) {
             return true;
         case FEATURE_MOD_PURPOSE:
             return MOD_PURPOSE_COLLABORATION;
+        case FEATURE_ADVANCED_GRADING:
+            return true;
 
         default:
             return null;
     }
+}
+
+/**
+ * Advanced grading areas for assignment page sets.
+ *
+ * Question grades stay on the numeric question flow. Only Moodle's built-in
+ * rubric applies to a submitted page set.
+ *
+ * @return string[]
+ */
+function icontent_grading_areas_list() {
+    return [
+        'submission' => get_string('gradingareasubmission', 'icontent'),
+    ];
 }
 
 /**
@@ -176,6 +192,7 @@ function icontent_delete_instance($id) {
         return false;
     }
     // Delete any dependent records here.
+    \mod_icontent\local\mobile_questions::delete(['cmid' => $cm->id]);
     $DB->delete_records('icontent_pages_notes_like', ['cmid' => $cm->id]);
     $DB->delete_records('icontent_pages_notes', ['cmid' => $cm->id]);
     $DB->delete_records('icontent_pages_questions', ['cmid' => $cm->id]);
@@ -714,6 +731,15 @@ function icontent_grade_item_delete($icontent) {
 function icontent_update_grades(stdClass $icontent, $userid = 0) {
     global $CFG, $DB;
     require_once($CFG->libdir . '/gradelib.php');
+    if (!empty($icontent->assignmentmode)) {
+        require_once($CFG->dirroot . '/mod/icontent/locallib.php');
+        $cm = get_coursemodule_from_instance('icontent', $icontent->id, $icontent->course, false, MUST_EXIST);
+        $userids = $userid ? [(int)$userid] : array_keys(icontent_get_attempts_users($cm->id, 'ASC', 0, 0));
+        foreach ($userids as $participantid) {
+            icontent_set_grade_item($icontent, $cm->id, $participantid);
+        }
+        return;
+    }
 
     // Populate array of grade objects indexed by userid.
     $grades = [];
@@ -1002,8 +1028,16 @@ function mod_icontent_question_pluginfile(
     $forcedownload,
     array $options = []
 ) {
-
-    require_login($course);
+    global $DB;
+    if ($DB->record_exists('icontent_mobile_usages', ['qubaid' => $qubaid])) {
+        if (!\mod_icontent\local\mobile_questions::can_access_file(
+            (int)$qubaid, (int)$slot, (int)$context->id, $component, $filearea, $args, (bool)$forcedownload
+        )) {
+            send_file_not_found();
+        }
+    } else {
+        require_login($course);
+    }
 
     $fs = get_file_storage();
     $relativepath = implode('/', $args);
@@ -1142,7 +1176,8 @@ function icontent_extend_settings_navigation(settings_navigation $settingsnav, $
  * @param int $pagenum
  * @param object $icontent
  * @param object $context
- * @param object $sourcepageid
+ * @param int $sourcepageid Source page id, or zero when opening the activity.
+ * @param int $submissionid Submission id, or zero for shared reference pages.
  * @return array $pageicontent
  */
 function icontent_ajax_getpage($pagenum, $icontent, $context, $sourcepageid = 0, int $submissionid = 0) {
@@ -1466,13 +1501,7 @@ function icontent_phase3_process_qengine_attempts(array $postdata, stdClass $cm,
                 continue;
             }
 
-            $effectivemaxmark = (float)($pagequestion->maxmark ?? 0);
-            if ($effectivemaxmark <= 0) {
-                $effectivemaxmark = (float)($pagequestion->defaultmark ?? 0);
-            }
-            if ($effectivemaxmark <= 0) {
-                $effectivemaxmark = 1.0;
-            }
+            $effectivemaxmark = (float)$qa->get_max_mark();
 
             $qafraction = $qa->get_fraction();
             $fraction = ($qafraction === null) ? null : (float)$qafraction;
@@ -1579,6 +1608,7 @@ function icontent_phase3_process_qengine_attempts(array $postdata, stdClass $cm,
                 'userid' => (int)$USER->id,
                 'cmid' => (int)$cm->id,
                 'fraction' => $fraction,
+                'maxmark' => $effectivemaxmark,
                 'rightanswer' => $rightanswer,
                 'answertext' => $answertext,
                 'answertextformat' => $answertextformat,
@@ -1668,7 +1698,8 @@ function icontent_ajax_saveattempt($formdata, stdClass $cm, $icontent) {
             $records[$i]->questionid = (int) $qid;
             $records[$i]->userid = (int) $USER->id;
             $records[$i]->cmid = (int) $cm->id;
-            $records[$i]->fraction = $infoanswer->fraction * ($maxmarksbyqpid[(int)$qpid] ?? 1.0);
+            $records[$i]->maxmark = $maxmarksbyqpid[(int)$qpid] ?? 1.0;
+            $records[$i]->fraction = $infoanswer->fraction * $records[$i]->maxmark;
             $records[$i]->rightanswer = $infoanswer->rightanswer;
             $records[$i]->answertext = $infoanswer->answertext;
             $records[$i]->timecreated = time();
@@ -1711,10 +1742,25 @@ function icontent_ajax_saveattempt($formdata, stdClass $cm, $icontent) {
     if (!empty($currentpage)) {
         $routednextpageid = (int)icontent_get_question_routed_next_pageid($currentpage);
         if (!empty($routednextpageid) && $routednextpageid !== (int)$currentpage->id) {
-            $routednextpage = icontent_get_visible_page_by_id($routednextpageid, (int)$cm->id);
+            $routednextpage = icontent_get_visible_page_by_id(
+                $routednextpageid,
+                (int)$cm->id,
+                (int)$currentpage->submissionid
+            );
             if (!empty($routednextpage->pagenum)) {
-                $summary->routednextpageid = (int)$routednextpageid;
-                $summary->routednextpagenum = (int)$routednextpage->pagenum;
+                if (!has_any_capability(
+                    ['mod/icontent:edit', 'mod/icontent:manage', 'mod/icontent:grade'],
+                    context_module::instance((int)$cm->id)
+                ) && !\mod_icontent\local\assignment::can_navigate_to_page(
+                    $currentpage,
+                    $routednextpage,
+                    (int)$USER->id
+                )) {
+                    $summary->pagegradingrequired = get_string('pagegradingrequired', 'mod_icontent');
+                } else {
+                    $summary->routednextpageid = (int)$routednextpageid;
+                    $summary->routednextpagenum = (int)$routednextpage->pagenum;
+                }
             }
         }
     }
@@ -1782,6 +1828,7 @@ function icontent_reset_instance($icontentid) {
         return true;
     }
 
+    \mod_icontent\local\mobile_questions::delete(['cmid' => $cm->id]);
     $DB->delete_records('icontent_pages_notes_like', ['cmid' => $cm->id]);
     $DB->delete_records('icontent_pages_notes', ['cmid' => $cm->id]);
     $DB->delete_records('icontent_pages_displayed', ['cmid' => $cm->id]);
