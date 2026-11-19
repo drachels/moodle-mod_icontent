@@ -698,6 +698,8 @@ final class assignment_test extends \advanced_testcase {
     }
 
     /**
+     * Provide page score ownership scenarios.
+     *
      * @return array
      */
     public static function page_score_ownership_provider(): array {

@@ -51,12 +51,7 @@ $PAGE->navbar->add(get_string('results', 'mod_icontent'))->add(get_string('manua
 $tquestinstance = icontent_get_totalquestions_by_instance($cm->id);
 $pagerubricreviews = \mod_icontent\local\assignment::get_page_rubric_reviews($cm->id, (int)$user->id, $status);
 $pagerubricsavedcount = 0;
-/**
- * Build the single rubric form for the participant's page reviews.
- *
- * @param int[] $excludedids Review ids that must not be shown, because they were just saved.
- * @return array The form, or null when no rubric can be shown, and its review data keyed by review id.
- */
+// Build the single rubric form for the participant's page reviews.
 $buildpagerubricform = function (
     array $excludedids = []
 ) use ($pagerubricreviews, $context, $icontent, $cm, $user, $status): array {
@@ -106,13 +101,7 @@ $buildpagerubricform = function (
     ], 'post', '', ['data-random-ids' => '1']);
     return [$form, $formreviews];
 };
-/**
- * Save the given completed page rubrics.
- *
- * @param int[] $reviewids Review ids to save.
- * @param array|stdClass $data Submitted form data.
- * @param array $formreviews Review data of the submitted form, keyed by review id.
- */
+// Save the given completed page rubrics.
 $savepagerubrics = function (
     array $reviewids,
     $data,

@@ -35,7 +35,6 @@ Upgrade.txt working notes:
 20240825 iContent_1302 - Need to update the two functions regarding scale_used
     and Scale_used_anywhere.
 20240827 iContent_1309 - Need to implement viewaftertimeclose capability.
-20260313 iContent_1440 - Need to implement running code prechecks before a release.
 20260623 iContent_1508 - Feature Request - It would be nice to include Content Page documentation
     as an included activity.
 20260623 iContent_1509 - Feature Request - It would be nice if the question_matrix was an editable page.
@@ -45,7 +44,8 @@ Upgrade.txt working notes:
 20260715 iContent_1518 - Feature Request - Can SEB be used with Content pages that have questions? 
 20260809 iContent_1528 - Feature Request - Investigate adding audio interface capability to
     pages and questions.
-20260829 iContent_1533 - Feature Request - Need to create Group mode visibility.
+20260829  iContent_1533 - Feature Request - Group visibility for teacher-created pages
+    and branches.
 
 
 
@@ -73,6 +73,11 @@ Upgrade.txt working notes:
         Current manual testing confirms page views and question answers appear in
         the Recent activity block. Related fix recorded under iContent_1322r in 2.0.3;
         moved this ticket from Deferred to 4.0.0 to record the current verification.
+20260313 iContent_1440 - Need to implement running code prechecks before a release.
+    2026111900 - Run Moodle Code Checker across the complete mod/icontent tree; fix
+        reported license headers, line lengths, test docblocks and closure comments.
+    2026111901 - Run Moodle PHPDoc Checker across the complete mod/icontent tree.
+        Both release prechecks pass with no remaining errors or warnings.
 20260317 iContent_1446bt - Follow-up: keep question points consistent with the bank version.
     2026110700 - Questions whose page maximum was copied from the bank default now
         follow the latest ready/draft version's default; distinct maxima remain overrides.
@@ -149,6 +154,14 @@ Upgrade.txt working notes:
         renderer.php as a compatibility wrapper for legacy callers and theme subclasses.
     2026103130 - Preserve renderer methods and AMD initialization; verify Moodle renderer
         discovery, legacy compatibility and JavaScript requirements with 3 tests and 10 assertions.
+20260829 iContent_1534bt - Feature Request - Need non-teacher page edit and creation mode for
+    individuals and groups.
+    2026111900 - Add a page-set assignment setting that lets students create and submit
+        separate individual or group sets of Content Pages.
+    2026111901 - Keep individual drafts private, share group drafts with eligible group
+        members and restrict editing while a submission is submitted or graded.
+    2026111902 - Support submission, public viewing, teacher grading and individual
+        or group deadline extensions for the new page-set assignments.
 20260901 iContent_1539bt - Feature Request - Import Presentations with each slide
     being a new page.
     2026090401 Might refer to this plugin https://marketplace.moodle.com/plugins/4084 that imports
@@ -176,8 +189,7 @@ Upgrade.txt working notes:
         disclosure controls. Initially only the current page's branch is open; AJAX page
         navigation opens the destination branch. Add Expand all / Collapse all controls.
         This only folds navigation; page visibility, ordering and teacher actions are unchanged.
-20261031 iContent_1575bt - iContent - Feature Request - Add the capability to make Content Page
-    Branches into an assignment.
+20261031 iContent_1575bt - iContent - Feature Request - Branch routing or grading as an assignment.
     2026103100 Added standalone individual/group page-set assignments with due dates, final
         submission, teacher grading, and optional visibility to course participants.
     2026103105 - Keep teacher reference pages shared and student/group page sets isolated across

@@ -609,7 +609,12 @@ final class mobile_test extends \advanced_testcase {
         $notes = json_decode($otherdata['notes'], true, 512, JSON_THROW_ON_ERROR);
         $this->assertSame('doubt', $notes[0]['tab']);
         $this->assertSame('App question', strip_tags($notes[0]['text']));
-        foreach ([['comment' => ''], ['comment' => str_repeat('x', 1025)], ['comment' => 'Invalid tab', 'tab' => 'wrong']] as $payload) {
+        $invalidpayloads = [
+            ['comment' => ''],
+            ['comment' => str_repeat('x', 1025)],
+            ['comment' => 'Invalid tab', 'tab' => 'wrong'],
+        ];
+        foreach ($invalidpayloads as $payload) {
             try {
                 mobile::mobile_view(['cmid' => $cm->id, 'pageid' => $pageid, 'action' => 'addnote',
                     'payload' => json_encode($payload, JSON_THROW_ON_ERROR)]);

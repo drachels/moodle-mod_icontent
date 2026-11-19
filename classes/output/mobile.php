@@ -42,7 +42,11 @@ class mobile {
         $submissionid = clean_param($args['submissionid'] ?? 0, PARAM_INT);
         $pageid = clean_param($args['pageid'] ?? 0, PARAM_INT);
         $action = $args['action'] ?? '';
-        if (!in_array($action, ['', 'save', 'submit', 'retry', 'addnote', 'editnote', 'replynote', 'deletenote', 'likenote'], true)) {
+        if (!in_array(
+            $action,
+            ['', 'save', 'submit', 'retry', 'addnote', 'editnote', 'replynote', 'deletenote', 'likenote'],
+            true
+        )) {
             throw new \invalid_parameter_exception('Invalid mobile action.');
         }
         if ($cmid <= 0 || $submissionid < 0 || $pageid < 0 ||
@@ -161,7 +165,11 @@ class mobile {
                                 $questions = [];
                             }
                             $data['browserresults'] = true;
-                            foreach (\icontent_get_submitted_answers_by_attempt_summary_by_page($selected->id, $cm->id) as $answer) {
+                            $submittedanswers = \icontent_get_submitted_answers_by_attempt_summary_by_page(
+                                $selected->id,
+                                $cm->id
+                            );
+                            foreach ($submittedanswers as $answer) {
                                 $pastanswers[] = [
                                     'name' => $answer->questionname,
                                     'answer' => strip_tags($answer->answertext),
